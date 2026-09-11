@@ -1,58 +1,76 @@
 // Mirrors app/backend/src/types.ts - kept as a plain duplicate rather than a
 // shared package to keep this demo's two npm workspaces independent.
 
-export type AssetType =
-  | "RealEstate"
-  | "Invoice"
-  | "Commodity"
-  | "PrivateCredit"
-  | "Other";
-
-export type AssetStatus =
+export type ListingCategory = "Property" | "Item";
+export type ListingType = "ForSale" | "ToLet";
+export type ListingStatus =
   | "PendingReview"
   | "Active"
-  | "FullyFunded"
-  | "Frozen"
-  | "Rejected";
+  | "Flagged"
+  | "UnderOffer"
+  | "Sold"
+  | "Removed";
+export type OrderStatus = "Funded" | "Released" | "Disputed" | "Resolved" | "Cancelled";
 
-export interface RwaAsset {
+export interface Listing {
   id: string;
-  onChainAssetId: number | null;
-  originator: string | null;
-  name: string;
-  assetType: AssetType;
-  location: string;
+  onChainListingId: number | null;
+  seller: string | null;
+  category: ListingCategory;
+  listingType: ListingType;
+  title: string;
   description: string;
-  documents: string[];
-  valuationUsd: number;
-  totalShares: number;
-  sharesSold: number;
-  pricePerShareLamports: number;
-  status: AssetStatus;
-  aiRiskScore: number | null;
-  mint: string | null;
+  location: string;
+  images: string[];
+  priceLamports: number;
+  guidePriceGBP: number;
+  status: ListingStatus;
+  aiFraudScore: number | null;
+  aiFraudFlags: string[];
   createdAt: string;
 }
 
-export interface RiskAssessment {
+export interface DisputeMessage {
+  author: "buyer" | "seller";
+  content: string;
+  createdAt: string;
+}
+
+export interface Order {
+  id: string;
+  onChainOrderId: number | null;
+  listingId: string;
+  buyerName: string;
+  amountLamports: number;
+  status: OrderStatus;
+  disputeReasonUri: string | null;
+  disputeMessages: DisputeMessage[];
+  createdAt: string;
+}
+
+export interface FraudScreening {
   score: number;
-  rating: "Low" | "Medium" | "High" | "Critical";
-  factors: string[];
+  recommendation: "Approve" | "Flag" | "Reject";
+  flags: string[];
   summary: string;
 }
 
-export interface ValuationEstimate {
-  estimatedValueUsd: number;
-  lowUsd: number;
-  highUsd: number;
+export interface PriceSuggestion {
+  suggestedPriceGBP: number;
+  lowGBP: number;
+  highGBP: number;
   reasoning: string;
 }
 
-export interface DueDiligenceReport {
+export type DisputeResolutionSuggestion = "ReleaseToSeller" | "RefundBuyer" | "Split";
+
+export interface DisputeSummary {
   summary: string;
-  strengths: string[];
-  risks: string[];
-  recommendation: "Approve" | "ApproveWithConditions" | "Reject";
+  buyerClaim: string;
+  sellerClaim: string;
+  suggestedResolution: DisputeResolutionSuggestion;
+  suggestedSellerSharePct: number;
+  reasoning: string;
 }
 
 export interface ChatMessage {

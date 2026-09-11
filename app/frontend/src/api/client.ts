@@ -1,9 +1,11 @@
 import type {
   ChatMessage,
-  DueDiligenceReport,
-  RiskAssessment,
-  RwaAsset,
-  ValuationEstimate,
+  DisputeSummary,
+  FraudScreening,
+  Listing,
+  ListingCategory,
+  Order,
+  PriceSuggestion,
 } from "../types";
 
 /** In dev, Vite proxies /api/* to the backend (see vite.config.ts). In a
@@ -23,29 +25,86 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listAssets: () => request<{ assets: RwaAsset[] }>("/api/assets"),
+  listListings: (category?: ListingCategory) =>
+    request<{ listings: Listing[] }>(`/api/listings${category ? `?category=${category}` : ""}`),
 
-  getAsset: (id: string) => request<{ asset: RwaAsset }>(`/api/assets/${id}`),
+  getListing: (id: string) => request<{ listing: Listing }>(`/api/listings/${id}`),
 
-  getRiskScore: (id: string) =>
-    request<{ assessment: RiskAssessment }>(`/api/ai/assets/${id}/risk-score`, {
+  createListing: (input: {
+    title: string;
+    category: ListingCategory;
+    listingType: Listing["listingType"];
+    location: string;
+    description: string;
+    images: string[];
+    priceLamports: number;
+    guidePriceGBP: number;
+  }) =>
+    request<{ listing: Listing }>("/api/listings", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  listOrders: (listingId?: string) =>
+    request<{ orders: Order[] }>(`/api/orders${listingId ? `?listingId=${listingId}` : ""}`),
+
+  getOrder: (id: string) => request<{ order: Order }>(`/api/orders/${id}`),
+
+  createOrder: (listingId: string, buyerName: string) =>
+    request<{ order: Order }>("/api/orders", {
+      method: "POST",
+      body: JSON.stringify({ listingId, buyerName }),
+    }),
+
+  confirmReceipt: (orderId: string) =>
+    request<{ order: Order }>(`/api/orders/${orderId}/confirm-receipt`, { method: "POST" }),
+
+  cancelOrder: (orderId: string) =>
+    request<{ order: Order }>(`/api/orders/${orderId}/cancel`, { method: "POST" }),
+
+  openDispute: (orderId: string, author: "buyer" | "seller", content: string) =>
+    request<{ order: Order }>(`/api/orders/${orderId}/dispute`, {
+      method: "POST",
+      body: JSON.stringify({ author, content }),
+    }),
+
+  addDisputeMessage: (orderId: string, author: "buyer" | "seller", content: string) =>
+    request<{ order: Order }>(`/api/orders/${orderId}/dispute/messages`, {
+      method: "POST",
+      body: JSON.stringify({ author, content }),
+    }),
+
+  resolveDispute: (orderId: string, resolution: "ReleaseToSeller" | "RefundBuyer" | "Split") =>
+    request<{ order: Order }>(`/api/orders/${orderId}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ resolution }),
+    }),
+
+  reviewListing: (listingId: string, aiFraudScore: number, aiFraudFlags: string[]) =>
+    request<{ listing: Listing }>(`/api/listings/${listingId}/review`, {
+      method: "POST",
+      body: JSON.stringify({ aiFraudScore, aiFraudFlags }),
+    }),
+
+  getFraudScreening: (listingId: string) =>
+    request<{ screening: FraudScreening }>(`/api/ai/listings/${listingId}/fraud-screen`, {
       method: "POST",
     }),
 
-  getValuation: (id: string) =>
-    request<{ valuation: ValuationEstimate }>(`/api/ai/assets/${id}/valuation`, {
+  getPriceSuggestion: (listingId: string) =>
+    request<{ suggestion: PriceSuggestion }>(`/api/ai/listings/${listingId}/price-suggestion`, {
       method: "POST",
     }),
 
-  getDueDiligence: (id: string) =>
-    request<{ report: DueDiligenceReport }>(`/api/ai/assets/${id}/due-diligence`, {
-      method: "POST",
-    }),
-
-  askQuestion: (id: string, question: string, history: ChatMessage[]) =>
-    request<{ answer: string }>(`/api/ai/assets/${id}/chat`, {
+  askListingQuestion: (listingId: string, question: string, history: ChatMessage[]) =>
+    request<{ answer: string }>(`/api/ai/listings/${listingId}/chat`, {
       method: "POST",
       body: JSON.stringify({ question, history }),
+    }),
+
+  getDisputeSummary: (orderId: string) =>
+    request<{ summary: DisputeSummary }>(`/api/ai/orders/${orderId}/dispute-summary`, {
+      method: "POST",
     }),
 
   health: () =>

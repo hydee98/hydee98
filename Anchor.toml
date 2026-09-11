@@ -6,10 +6,10 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-rwa_tokenization = "96fhowjcVma9sKzQuiStDvXZsPDc9GnafKfSAwdTkyCP"
+escrow_marketplace = "Byjh8A9Zir4PXUPUDJufmC6xoii5LN9W2omdt5D9LUuw"
 
 [programs.devnet]
-rwa_tokenization = "96fhowjcVma9sKzQuiStDvXZsPDc9GnafKfSAwdTkyCP"
+escrow_marketplace = "Byjh8A9Zir4PXUPUDJufmC6xoii5LN9W2omdt5D9LUuw"
 
 [registry]
 url = "https://api.apr.dev"

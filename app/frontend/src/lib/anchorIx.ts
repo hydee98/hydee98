@@ -1,20 +1,10 @@
-import {
-  PublicKey,
-  SystemProgram,
-  SYSVAR_RENT_PUBKEY,
-  TransactionInstruction,
-} from "@solana/web3.js";
-import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-  deriveAssociatedTokenAddress,
-  deriveKycPda,
-  deriveVaultPda,
-} from "./solana";
+import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import { PROGRAM_ID, deriveOrderPda, deriveOrderVaultPda } from "./solana";
 
 /**
- * Hand-rolled Anchor instruction encoding for the `invest` instruction.
+ * Hand-rolled Anchor instruction encoding for `create_order` and
+ * `confirm_receipt` - the two instructions a connected wallet actually
+ * signs in this dApp (buying, and releasing escrow on receipt).
  *
  * Why not the `@coral-xyz/anchor` `Program` client? That needs the IDL
  * produced by `anchor build`, which requires the Solana/Anchor CLI - not
@@ -27,10 +17,10 @@ import {
  *   exact order declared in the Rust `#[program]` function signature.
  *
  * Once you run `anchor build`, prefer swapping this for a typed
- * `Program<RwaTokenization>` built from `target/idl/rwa_tokenization.json`
- * - it gives you compile-time-checked accounts/args instead of this manual
- * encoding. This module exists so the dApp has a real, working on-chain
- * write path before that IDL exists.
+ * `Program<EscrowMarketplace>` built from
+ * `target/idl/escrow_marketplace.json` - it gives you compile-time-checked
+ * accounts/args instead of this manual encoding, and the encoder below can
+ * be deleted.
  */
 
 async function anchorDiscriminator(namespace: "global", name: string): Promise<Buffer> {
@@ -45,49 +35,68 @@ function u64LeBuffer(value: bigint): Buffer {
   return buf;
 }
 
-export interface InvestParams {
-  /** The asset originator's wallet - part of the asset/vault PDA seeds. */
-  originator: PublicKey;
-  /** The asset's on-chain id (`Asset.id`, i.e. `registry.asset_count` at
-   * the time it was registered). */
-  assetId: bigint;
-  assetPda: PublicKey;
-  mint: PublicKey;
-  investor: PublicKey;
-  sharesAmount: bigint;
+export interface CreateOrderParams {
+  listingPda: PublicKey;
+  /** The listing's current `order_count` - used to derive this new
+   * order's PDA/vault, and becomes the order's own `id`. */
+  orderId: bigint;
+  buyer: PublicKey;
+  amountLamports: bigint;
 }
 
-/** Builds the `invest(shares_amount: u64)` instruction. The investor pays
- * `shares_amount * price_per_share_lamports` (read on-chain from the asset
- * account by the program) into the asset's SOL vault and receives
- * `shares_amount` share tokens, minting the investor's associated token
- * account on the fly if it doesn't exist yet. */
-export async function buildInvestInstruction(
-  params: InvestParams
+/** Builds the `create_order(amount_lamports: u64)` instruction: the buyer
+ * pays `amountLamports` into a new per-order escrow vault. */
+export async function buildCreateOrderInstruction(
+  params: CreateOrderParams
 ): Promise<TransactionInstruction> {
-  const { originator, assetId, assetPda, mint, investor, sharesAmount } = params;
+  const { listingPda, orderId, buyer, amountLamports } = params;
+  const [orderPda] = deriveOrderPda(listingPda, orderId);
+  const [vaultPda] = deriveOrderVaultPda(listingPda, orderId);
 
-  const [vaultPda] = deriveVaultPda(originator, assetId);
-  const [kycPda] = deriveKycPda(investor);
-  const investorSharesAccount = deriveAssociatedTokenAddress(investor, mint);
-
-  const discriminator = await anchorDiscriminator("global", "invest");
-  const data = Buffer.concat([discriminator, u64LeBuffer(sharesAmount)]);
+  const discriminator = await anchorDiscriminator("global", "create_order");
+  const data = Buffer.concat([discriminator, u64LeBuffer(amountLamports)]);
 
   return new TransactionInstruction({
     programId: PROGRAM_ID,
     data,
     keys: [
-      { pubkey: assetPda, isSigner: false, isWritable: true },
+      { pubkey: listingPda, isSigner: false, isWritable: true },
+      { pubkey: orderPda, isSigner: false, isWritable: true },
       { pubkey: vaultPda, isSigner: false, isWritable: true },
-      { pubkey: kycPda, isSigner: false, isWritable: false },
-      { pubkey: mint, isSigner: false, isWritable: true },
-      { pubkey: investorSharesAccount, isSigner: false, isWritable: true },
-      { pubkey: investor, isSigner: true, isWritable: true },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: buyer, isSigner: true, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+    ],
+  });
+}
+
+export interface ConfirmReceiptParams {
+  listingPda: PublicKey;
+  orderId: bigint;
+  seller: PublicKey;
+  buyer: PublicKey;
+}
+
+/** Builds the `confirm_receipt()` instruction: the buyer confirms
+ * delivery/handover, releasing the full escrowed amount to the seller. */
+export async function buildConfirmReceiptInstruction(
+  params: ConfirmReceiptParams
+): Promise<TransactionInstruction> {
+  const { listingPda, orderId, seller, buyer } = params;
+  const [orderPda] = deriveOrderPda(listingPda, orderId);
+  const [vaultPda] = deriveOrderVaultPda(listingPda, orderId);
+
+  const discriminator = await anchorDiscriminator("global", "confirm_receipt");
+
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    data: discriminator,
+    keys: [
+      { pubkey: orderPda, isSigner: false, isWritable: true },
+      { pubkey: listingPda, isSigner: false, isWritable: true },
+      { pubkey: vaultPda, isSigner: false, isWritable: true },
+      { pubkey: seller, isSigner: false, isWritable: true },
+      { pubkey: buyer, isSigner: true, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
   });
 }

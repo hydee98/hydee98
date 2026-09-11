@@ -1,20 +1,20 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 
 /**
- * Thin read-side integration with the on-chain `rwa_tokenization` Anchor
- * program (see /programs/rwa_tokenization). This module intentionally does
- * NOT depend on the generated Anchor IDL/client so the backend can build and
- * run before the program has ever been deployed (this sandbox has no Solana
- * CLI/Anchor CLI available - see the root README). Once you run
- * `anchor build` and deploy, swap `fetchClusterStatus`'s manual RPC calls
- * for a typed `@coral-xyz/anchor` `Program<RwaTokenization>` client built
- * from `target/idl/rwa_tokenization.json`, and use it to decode `Asset` /
- * `Registry` / `KycRecord` accounts directly instead of the in-memory demo
- * store in `data/assets.ts`.
+ * Thin read-side integration with the on-chain `escrow_marketplace` Anchor
+ * program (see /programs/escrow_marketplace). This module intentionally
+ * does NOT depend on the generated Anchor IDL/client so the backend can
+ * build and run before the program has ever been deployed (this sandbox
+ * has no Solana CLI/Anchor CLI available - see the root README). Once you
+ * run `anchor build` and deploy, swap `fetchClusterStatus`'s manual RPC
+ * calls for a typed `@coral-xyz/anchor` `Program<EscrowMarketplace>` client
+ * built from `target/idl/escrow_marketplace.json`, and use it to decode
+ * `Listing` / `Order` / `Marketplace` accounts directly instead of the
+ * in-memory demo stores in `data/listings.ts` / `data/orders.ts`.
  */
 
 const PROGRAM_ID = new PublicKey(
-  process.env.RWA_PROGRAM_ID || "96fhowjcVma9sKzQuiStDvXZsPDc9GnafKfSAwdTkyCP"
+  process.env.MARKETPLACE_PROGRAM_ID || "Byjh8A9Zir4PXUPUDJufmC6xoii5LN9W2omdt5D9LUuw"
 );
 
 let connection: Connection | null = null;
@@ -32,41 +32,46 @@ export function getProgramId(): PublicKey {
   return PROGRAM_ID;
 }
 
-/** Mirrors `seeds = [b"registry"]` in lib.rs. */
-export function deriveRegistryPda(): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID);
+/** Mirrors `seeds = [b"marketplace"]` in lib.rs. */
+export function deriveMarketplacePda(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([Buffer.from("marketplace")], PROGRAM_ID);
 }
 
-/** Mirrors `seeds = [b"asset", originator, asset_id_le_bytes]` in lib.rs. */
-export function deriveAssetPda(
-  originator: PublicKey,
-  assetId: bigint
+/** Mirrors `seeds = [b"listing", seller, listing_count_le_bytes]` in lib.rs. */
+export function deriveListingPda(
+  seller: PublicKey,
+  listingId: bigint
 ): [PublicKey, number] {
   const idBuf = Buffer.alloc(8);
-  idBuf.writeBigUInt64LE(assetId);
+  idBuf.writeBigUInt64LE(listingId);
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("asset"), originator.toBuffer(), idBuf],
+    [Buffer.from("listing"), seller.toBuffer(), idBuf],
     PROGRAM_ID
   );
 }
 
-/** Mirrors `seeds = [b"vault", originator, asset_id_le_bytes]` in lib.rs. */
-export function deriveVaultPda(
-  originator: PublicKey,
-  assetId: bigint
+/** Mirrors `seeds = [b"order", listing, order_count_le_bytes]` in lib.rs. */
+export function deriveOrderPda(
+  listing: PublicKey,
+  orderId: bigint
 ): [PublicKey, number] {
   const idBuf = Buffer.alloc(8);
-  idBuf.writeBigUInt64LE(assetId);
+  idBuf.writeBigUInt64LE(orderId);
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("vault"), originator.toBuffer(), idBuf],
+    [Buffer.from("order"), listing.toBuffer(), idBuf],
     PROGRAM_ID
   );
 }
 
-/** Mirrors `seeds = [b"kyc", investor]` in lib.rs. */
-export function deriveKycPda(investor: PublicKey): [PublicKey, number] {
+/** Mirrors `seeds = [b"order_vault", listing, order_count_le_bytes]` in lib.rs. */
+export function deriveOrderVaultPda(
+  listing: PublicKey,
+  orderId: bigint
+): [PublicKey, number] {
+  const idBuf = Buffer.alloc(8);
+  idBuf.writeBigUInt64LE(orderId);
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("kyc"), investor.toBuffer()],
+    [Buffer.from("order_vault"), listing.toBuffer(), idBuf],
     PROGRAM_ID
   );
 }

@@ -1,18 +1,11 @@
 import { PublicKey } from "@solana/web3.js";
 
-/** Must match declare_id!(...) in programs/rwa_tokenization/src/lib.rs and
- * app/backend/.env.example's RWA_PROGRAM_ID. Override via VITE_RWA_PROGRAM_ID
- * once you deploy your own instance. */
+/** Must match declare_id!(...) in programs/escrow_marketplace/src/lib.rs
+ * and app/backend/.env.example's MARKETPLACE_PROGRAM_ID. Override via
+ * VITE_MARKETPLACE_PROGRAM_ID once you deploy your own instance. */
 export const PROGRAM_ID = new PublicKey(
-  import.meta.env.VITE_RWA_PROGRAM_ID ??
-    "96fhowjcVma9sKzQuiStDvXZsPDc9GnafKfSAwdTkyCP"
-);
-
-export const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
-  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-);
-export const TOKEN_PROGRAM_ID = new PublicKey(
-  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+  import.meta.env.VITE_MARKETPLACE_PROGRAM_ID ??
+    "Byjh8A9Zir4PXUPUDJufmC6xoii5LN9W2omdt5D9LUuw"
 );
 
 function u64Le(value: bigint): Buffer {
@@ -21,50 +14,42 @@ function u64Le(value: bigint): Buffer {
   return buf;
 }
 
-/** Mirrors `seeds = [b"registry"]`. */
-export function deriveRegistryPda(): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID);
+/** Mirrors `seeds = [b"marketplace"]`. */
+export function deriveMarketplacePda(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([Buffer.from("marketplace")], PROGRAM_ID);
 }
 
-/** Mirrors `seeds = [b"asset", originator, asset_id_le_bytes]`. */
-export function deriveAssetPda(
-  originator: PublicKey,
-  assetId: bigint
+/** Mirrors `seeds = [b"listing", seller, listing_count_le_bytes]`. */
+export function deriveListingPda(
+  seller: PublicKey,
+  listingId: bigint
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("asset"), originator.toBuffer(), u64Le(assetId)],
+    [Buffer.from("listing"), seller.toBuffer(), u64Le(listingId)],
     PROGRAM_ID
   );
 }
 
-/** Mirrors `seeds = [b"vault", originator, asset_id_le_bytes]`. */
-export function deriveVaultPda(
-  originator: PublicKey,
-  assetId: bigint
+/** Mirrors `seeds = [b"order", listing, order_count_le_bytes]`. */
+export function deriveOrderPda(
+  listing: PublicKey,
+  orderId: bigint
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("vault"), originator.toBuffer(), u64Le(assetId)],
+    [Buffer.from("order"), listing.toBuffer(), u64Le(orderId)],
     PROGRAM_ID
   );
 }
 
-/** Mirrors `seeds = [b"kyc", investor]`. */
-export function deriveKycPda(investor: PublicKey): [PublicKey, number] {
+/** Mirrors `seeds = [b"order_vault", listing, order_count_le_bytes]`. */
+export function deriveOrderVaultPda(
+  listing: PublicKey,
+  orderId: bigint
+): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("kyc"), investor.toBuffer()],
+    [Buffer.from("order_vault"), listing.toBuffer(), u64Le(orderId)],
     PROGRAM_ID
   );
-}
-
-/** Mirrors the SPL Associated Token Account address derivation. */
-export function deriveAssociatedTokenAddress(
-  owner: PublicKey,
-  mint: PublicKey
-): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  )[0];
 }
 
 export function lamportsToSol(lamports: number): number {

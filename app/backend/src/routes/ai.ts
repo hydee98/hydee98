@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { getAsset } from "../data/assets.js";
+import { getListing } from "../data/listings.js";
+import { getOrder } from "../data/orders.js";
 import {
   AiServiceError,
-  answerAssetQuestion,
-  assessRisk,
-  estimateValuation,
-  generateDueDiligence,
+  answerListingQuestion,
+  screenListingForFraud,
+  suggestPrice,
+  summarizeDispute,
 } from "../services/aiService.js";
 import type { ChatMessage } from "../types.js";
 
@@ -20,42 +21,31 @@ function handleAiError(res: import("express").Response, err: unknown) {
   return res.status(500).json({ error: "Unexpected server error" });
 }
 
-aiRouter.post("/assets/:id/risk-score", async (req, res) => {
-  const asset = getAsset(req.params.id);
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
+aiRouter.post("/listings/:id/fraud-screen", async (req, res) => {
+  const listing = getListing(req.params.id);
+  if (!listing) return res.status(404).json({ error: "Listing not found" });
   try {
-    const assessment = await assessRisk(asset);
-    res.json({ assessment });
+    const screening = await screenListingForFraud(listing);
+    res.json({ screening });
   } catch (err) {
     handleAiError(res, err);
   }
 });
 
-aiRouter.post("/assets/:id/valuation", async (req, res) => {
-  const asset = getAsset(req.params.id);
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
+aiRouter.post("/listings/:id/price-suggestion", async (req, res) => {
+  const listing = getListing(req.params.id);
+  if (!listing) return res.status(404).json({ error: "Listing not found" });
   try {
-    const valuation = await estimateValuation(asset);
-    res.json({ valuation });
+    const suggestion = await suggestPrice(listing);
+    res.json({ suggestion });
   } catch (err) {
     handleAiError(res, err);
   }
 });
 
-aiRouter.post("/assets/:id/due-diligence", async (req, res) => {
-  const asset = getAsset(req.params.id);
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
-  try {
-    const report = await generateDueDiligence(asset);
-    res.json({ report });
-  } catch (err) {
-    handleAiError(res, err);
-  }
-});
-
-aiRouter.post("/assets/:id/chat", async (req, res) => {
-  const asset = getAsset(req.params.id);
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
+aiRouter.post("/listings/:id/chat", async (req, res) => {
+  const listing = getListing(req.params.id);
+  if (!listing) return res.status(404).json({ error: "Listing not found" });
 
   const { question, history } = req.body ?? {};
   if (typeof question !== "string" || !question.trim()) {
@@ -73,8 +63,25 @@ aiRouter.post("/assets/:id/chat", async (req, res) => {
     : [];
 
   try {
-    const answer = await answerAssetQuestion(asset, question, safeHistory);
+    const answer = await answerListingQuestion(listing, question, safeHistory);
     res.json({ answer });
+  } catch (err) {
+    handleAiError(res, err);
+  }
+});
+
+aiRouter.post("/orders/:id/dispute-summary", async (req, res) => {
+  const order = getOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: "Order not found" });
+  if (order.status !== "Disputed") {
+    return res.status(409).json({ error: "Order does not have an open dispute" });
+  }
+  const listing = getListing(order.listingId);
+  if (!listing) return res.status(404).json({ error: "Listing not found for this order" });
+
+  try {
+    const summary = await summarizeDispute(listing, order);
+    res.json({ summary });
   } catch (err) {
     handleAiError(res, err);
   }

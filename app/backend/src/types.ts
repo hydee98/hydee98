@@ -1,63 +1,86 @@
-export type AssetType =
-  | "RealEstate"
-  | "Invoice"
-  | "Commodity"
-  | "PrivateCredit"
-  | "Other";
-
-export type AssetStatus =
+export type ListingCategory = "Property" | "Item";
+export type ListingType = "ForSale" | "ToLet";
+export type ListingStatus =
   | "PendingReview"
   | "Active"
-  | "FullyFunded"
-  | "Frozen"
-  | "Rejected";
+  | "Flagged"
+  | "UnderOffer"
+  | "Sold"
+  | "Removed";
+export type OrderStatus = "Funded" | "Released" | "Disputed" | "Resolved" | "Cancelled";
 
-/** Off-chain projection of the on-chain `Asset` account, enriched with the
- * descriptive fields an AI model needs (which never fit cheaply on-chain). */
-export interface RwaAsset {
+/** Off-chain projection of the on-chain `Listing` account, enriched with the
+ * descriptive fields an AI model needs (full description, photos) that
+ * never fit cheaply on-chain. */
+export interface Listing {
   id: string;
-  onChainAssetId: number | null;
-  /** Base58 pubkey of the on-chain asset's originator/issuer, used together
-   * with `onChainAssetId` to derive the asset/vault PDAs client-side. Null
-   * until this asset has actually been registered on-chain. */
-  originator: string | null;
-  name: string;
-  assetType: AssetType;
-  location: string;
+  onChainListingId: number | null;
+  /** Base58 pubkey of the seller's wallet, once this listing has actually
+   * been created on-chain via `create_listing`. Null for demo listings. */
+  seller: string | null;
+  category: ListingCategory;
+  listingType: ListingType;
+  title: string;
   description: string;
-  /** Supporting documents/data points a due-diligence reviewer would use.
-   * In production these would be fetched from the `uri` stored on-chain
-   * (IPFS/Arweave); here they're inlined for the demo. */
-  documents: string[];
-  valuationUsd: number;
-  totalShares: number;
-  sharesSold: number;
-  pricePerShareLamports: number;
-  status: AssetStatus;
-  aiRiskScore: number | null;
-  mint: string | null;
+  /** Postcode/area for Property; "N/A" for a general Item. */
+  location: string;
+  images: string[];
+  priceLamports: number;
+  /** Display-only guide price in GBP - independent of any live SOL/GBP
+   * exchange rate, purely so the listing reads like a real Zoopla/eBay
+   * price tag in the UI. */
+  guidePriceGBP: number;
+  status: ListingStatus;
+  aiFraudScore: number | null;
+  aiFraudFlags: string[];
   createdAt: string;
 }
 
-export interface RiskAssessment {
-  score: number; // 0-100, higher = riskier
-  rating: "Low" | "Medium" | "High" | "Critical";
-  factors: string[];
+export interface DisputeMessage {
+  author: "buyer" | "seller";
+  content: string;
+  createdAt: string;
+}
+
+/** Off-chain projection of the on-chain `Order` (escrow) account. */
+export interface Order {
+  id: string;
+  onChainOrderId: number | null;
+  listingId: string;
+  /** Display name/handle for the demo - a real deployment keys this off
+   * the buyer's wallet pubkey instead. */
+  buyerName: string;
+  amountLamports: number;
+  status: OrderStatus;
+  disputeReasonUri: string | null;
+  disputeMessages: DisputeMessage[];
+  createdAt: string;
+}
+
+export interface FraudScreening {
+  score: number; // 0-100, higher = more likely fraudulent
+  recommendation: "Approve" | "Flag" | "Reject";
+  flags: string[];
   summary: string;
 }
 
-export interface ValuationEstimate {
-  estimatedValueUsd: number;
-  lowUsd: number;
-  highUsd: number;
+export interface PriceSuggestion {
+  suggestedPriceGBP: number;
+  lowGBP: number;
+  highGBP: number;
   reasoning: string;
 }
 
-export interface DueDiligenceReport {
+export type DisputeResolutionSuggestion = "ReleaseToSeller" | "RefundBuyer" | "Split";
+
+export interface DisputeSummary {
   summary: string;
-  strengths: string[];
-  risks: string[];
-  recommendation: "Approve" | "ApproveWithConditions" | "Reject";
+  buyerClaim: string;
+  sellerClaim: string;
+  suggestedResolution: DisputeResolutionSuggestion;
+  /** Meaningful only when suggestedResolution is "Split" - seller's share, 0-100. */
+  suggestedSellerSharePct: number;
+  reasoning: string;
 }
 
 export interface ChatMessage {

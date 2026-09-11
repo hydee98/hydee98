@@ -1,10 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
   ChatMessage,
-  DueDiligenceReport,
-  RiskAssessment,
-  RwaAsset,
-  ValuationEstimate,
+  DisputeSummary,
+  FraudScreening,
+  Listing,
+  Order,
+  PriceSuggestion,
 } from "../types.js";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5";
@@ -30,17 +31,13 @@ export class AiServiceError extends Error {
   }
 }
 
-function describeAsset(asset: RwaAsset): string {
+function describeListing(listing: Listing): string {
   return [
-    `Name: ${asset.name}`,
-    `Type: ${asset.assetType}`,
-    `Location: ${asset.location}`,
-    `Stated valuation: $${asset.valuationUsd.toLocaleString()}`,
-    `Total shares: ${asset.totalShares} (sold: ${asset.sharesSold})`,
-    `Status: ${asset.status}`,
-    `Description: ${asset.description}`,
-    `Supporting documents / data points:`,
-    ...asset.documents.map((d) => `  - ${d}`),
+    `Title: ${listing.title}`,
+    `Category: ${listing.category}${listing.category === "Property" ? ` (${listing.listingType === "ToLet" ? "to let" : "for sale"})` : ""}`,
+    `Location: ${listing.location}`,
+    `Guide price: £${listing.guidePriceGBP.toLocaleString()}`,
+    `Description: ${listing.description}`,
   ].join("\n");
 }
 
@@ -62,7 +59,7 @@ function extractJson<T>(text: string): T {
   }
 }
 
-async function callClaude(system: string, userPrompt: string, maxTokens = 2000): Promise<string> {
+async function callClaude(system: string, userPrompt: string, maxTokens = 1500): Promise<string> {
   try {
     const response = await getClient().messages.create({
       model: MODEL,
@@ -100,70 +97,58 @@ async function callClaude(system: string, userPrompt: string, maxTokens = 2000):
   }
 }
 
-const RISK_SYSTEM_PROMPT = `You are a risk analyst for a real-world-asset (RWA) tokenization platform. \
-Given an asset's description and supporting documents, assess the investment risk of tokenizing and \
-offering fractional shares of it to retail investors. Consider: valuation credibility, documentation \
-completeness, counterparty/debtor/tenant quality, legal/title clarity, liquidity of the underlying \
-asset, and concentration risk. Be skeptical of thin or stale documentation - flag it. Respond with ONLY \
-a JSON object, no other text, matching exactly this shape:
-{"score": <integer 0-100, higher = riskier>, "rating": "Low"|"Medium"|"High"|"Critical", "factors": [<3-6 short strings, each one concrete risk or strength driving the score>], "summary": "<2-3 sentence plain-English summary for an investor>"}`;
+const FRAUD_SYSTEM_PROMPT = `You are a trust & safety analyst for a peer-to-peer marketplace (like eBay/Zoopla) \
+where buyers pay in crypto held in on-chain escrow until they confirm receipt. Given a new listing, screen it \
+for fraud/scam signals: pressure tactics ("must sell today"), discouraging platform escrow or pushing \
+off-platform payment/contact, prices far below plausible market value, vague or copy-pasted-sounding \
+descriptions, missing details a genuine seller would naturally include, and (for property) red flags like \
+"landlord abroad, wire deposit before viewing". Being cheap or brief is not by itself suspicious - look for \
+actual manipulation or evasion patterns. Respond with ONLY a JSON object, no other text, matching exactly \
+this shape:
+{"score": <integer 0-100, higher = more likely fraudulent>, "recommendation": "Approve"|"Flag"|"Reject", "flags": [<0-6 short strings, each one concrete signal you found - empty array if none>], "summary": "<2-3 sentence plain-English summary for a moderator>"}`;
 
-export async function assessRisk(asset: RwaAsset): Promise<RiskAssessment> {
+export async function screenListingForFraud(listing: Listing): Promise<FraudScreening> {
   const text = await callClaude(
-    RISK_SYSTEM_PROMPT,
-    `Assess this asset:\n\n${describeAsset(asset)}`
+    FRAUD_SYSTEM_PROMPT,
+    `Screen this listing:\n\n${describeListing(listing)}`
   );
-  const parsed = extractJson<RiskAssessment>(text);
+  const parsed = extractJson<FraudScreening>(text);
   parsed.score = Math.max(0, Math.min(100, Math.round(parsed.score)));
   return parsed;
 }
 
-const VALUATION_SYSTEM_PROMPT = `You are a valuation analyst for a real-world-asset (RWA) tokenization \
-platform. Given an asset's stated valuation, description, and supporting documents, sanity-check the \
-stated figure and produce an independent estimate range. You are not a licensed appraiser and have no \
-market data beyond what's given - be explicit about that limitation in your reasoning, and be \
-conservative when documentation is thin or stale. Respond with ONLY a JSON object, no other text, \
-matching exactly this shape:
-{"estimatedValueUsd": <integer, your point estimate>, "lowUsd": <integer>, "highUsd": <integer>, "reasoning": "<3-5 sentences explaining the estimate and calling out any red flags in the documentation>"}`;
+const PRICE_SYSTEM_PROMPT = `You are a pricing analyst for a peer-to-peer marketplace. Given a listing's \
+category, description, and the seller's own guide price, suggest a fair asking price range in GBP based on \
+general market knowledge for this kind of property/item. You have no live market data feed - be explicit \
+about that limitation, and be conservative when the description lacks details that matter for pricing \
+(condition, exact spec, location detail). Respond with ONLY a JSON object, no other text, matching exactly \
+this shape:
+{"suggestedPriceGBP": <integer, your point estimate>, "lowGBP": <integer>, "highGBP": <integer>, "reasoning": "<3-5 sentences explaining the estimate, noting how it compares to the seller's guide price and any missing details that limit confidence>"}`;
 
-export async function estimateValuation(asset: RwaAsset): Promise<ValuationEstimate> {
+export async function suggestPrice(listing: Listing): Promise<PriceSuggestion> {
   const text = await callClaude(
-    VALUATION_SYSTEM_PROMPT,
-    `Sanity-check the valuation of this asset:\n\n${describeAsset(asset)}`
+    PRICE_SYSTEM_PROMPT,
+    `Suggest a fair price for this listing:\n\n${describeListing(listing)}`
   );
-  return extractJson<ValuationEstimate>(text);
+  return extractJson<PriceSuggestion>(text);
 }
 
-const DUE_DILIGENCE_SYSTEM_PROMPT = `You are a due-diligence analyst preparing an investor-facing report \
-for a real-world-asset (RWA) tokenization platform. Given an asset's description and supporting \
-documents, write a concise due-diligence report. Respond with ONLY a JSON object, no other text, \
-matching exactly this shape:
-{"summary": "<2-4 sentence overview>", "strengths": [<2-5 short strings>], "risks": [<2-5 short strings>], "recommendation": "Approve"|"ApproveWithConditions"|"Reject"}`;
+const CHAT_SYSTEM_PROMPT = `You are a buyer-support assistant for a peer-to-peer marketplace. Answer \
+questions ONLY about the specific listing described below, using only the information given - do not \
+invent facts, condition details, or guarantees the seller hasn't stated. If asked something the listing \
+doesn't cover, say so plainly and suggest the buyer message the seller directly to ask. Keep answers \
+concise (under ~100 words) and in plain English. Remind the buyer that payment is held in escrow and only \
+released once they confirm receipt, if that's relevant to their question.
 
-export async function generateDueDiligence(asset: RwaAsset): Promise<DueDiligenceReport> {
-  const text = await callClaude(
-    DUE_DILIGENCE_SYSTEM_PROMPT,
-    `Prepare a due-diligence report for this asset:\n\n${describeAsset(asset)}`
-  );
-  return extractJson<DueDiligenceReport>(text);
-}
-
-const CHAT_SYSTEM_PROMPT = `You are an investor-support assistant for a real-world-asset (RWA) \
-tokenization platform. Answer questions ONLY about the specific asset described below, using only the \
-information given - do not invent facts, financial guarantees, or legal/tax/investment advice. If asked \
-something the provided information can't answer, say so plainly and suggest what document or step would \
-resolve it. Keep answers concise (under ~120 words) and in plain English. Always include a brief \
-reminder that this is not financial advice when the question concerns whether to invest.
-
-Asset details:
+Listing details:
 `;
 
-export async function answerAssetQuestion(
-  asset: RwaAsset,
+export async function answerListingQuestion(
+  listing: Listing,
   question: string,
   history: ChatMessage[] = []
 ): Promise<string> {
-  const system = CHAT_SYSTEM_PROMPT + describeAsset(asset);
+  const system = CHAT_SYSTEM_PROMPT + describeListing(listing);
   try {
     const messages: Anthropic.MessageParam[] = [
       ...history.map((m) => ({ role: m.role, content: m.content }) as Anthropic.MessageParam),
@@ -171,7 +156,7 @@ export async function answerAssetQuestion(
     ];
     const response = await getClient().messages.create({
       model: MODEL,
-      max_tokens: 800,
+      max_tokens: 700,
       system,
       thinking: { type: "adaptive" },
       output_config: { effort: "low" },
@@ -179,7 +164,7 @@ export async function answerAssetQuestion(
     });
 
     if (response.stop_reason === "refusal") {
-      return "I'm not able to answer that question about this asset.";
+      return "I'm not able to answer that question about this listing.";
     }
     const text = response.content.find((b) => b.type === "text");
     return text && text.type === "text"
@@ -200,4 +185,35 @@ export async function answerAssetQuestion(
     }
     throw new AiServiceError("Unexpected error calling the AI service", err);
   }
+}
+
+const DISPUTE_SYSTEM_PROMPT = `You are a dispute-resolution assistant for a peer-to-peer marketplace \
+where payment is held in on-chain escrow until the buyer confirms receipt. A dispute has been opened over \
+an order; you're given the listing, the order amount, and the back-and-forth messages both sides have \
+posted as evidence. Summarize both sides fairly and suggest a resolution for the human arbitrator who \
+makes the final call - you are not making the final decision yourself, only briefing them. Be even-handed: \
+do not assume either party is lying without evidence in the messages themselves. Respond with ONLY a JSON \
+object, no other text, matching exactly this shape:
+{"summary": "<2-3 sentence neutral overview of the dispute>", "buyerClaim": "<1-2 sentence summary of the buyer's position>", "sellerClaim": "<1-2 sentence summary of the seller's position>", "suggestedResolution": "ReleaseToSeller"|"RefundBuyer"|"Split", "suggestedSellerSharePct": <integer 0-100, only meaningful when suggestedResolution is "Split", otherwise 0 or 100 matching the resolution>, "reasoning": "<3-5 sentences explaining the recommendation and what evidence (or lack of it) drove it>"}`;
+
+export async function summarizeDispute(
+  listing: Listing,
+  order: Order
+): Promise<DisputeSummary> {
+  const messagesBlock = order.disputeMessages.length
+    ? order.disputeMessages
+        .map((m) => `[${m.author.toUpperCase()} @ ${m.createdAt}]: ${m.content}`)
+        .join("\n")
+    : "(no messages submitted yet)";
+
+  const prompt = [
+    `Listing:\n${describeListing(listing)}`,
+    `\nOrder amount escrowed: ${(order.amountLamports / 1_000_000_000).toFixed(4)} SOL`,
+    `\nDispute evidence / messages:\n${messagesBlock}`,
+  ].join("\n");
+
+  const text = await callClaude(DISPUTE_SYSTEM_PROMPT, prompt, 1200);
+  const parsed = extractJson<DisputeSummary>(text);
+  parsed.suggestedSellerSharePct = Math.max(0, Math.min(100, Math.round(parsed.suggestedSellerSharePct)));
+  return parsed;
 }

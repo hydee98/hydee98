@@ -2,7 +2,8 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import { aiRouter } from "./routes/ai.js";
-import { assetsRouter } from "./routes/assets.js";
+import { listingsRouter } from "./routes/listings.js";
+import { ordersRouter } from "./routes/orders.js";
 import { fetchClusterStatus } from "./services/solanaService.js";
 
 const app = express();
@@ -20,7 +21,8 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
-app.use("/api/assets", assetsRouter);
+app.use("/api/listings", listingsRouter);
+app.use("/api/orders", ordersRouter);
 app.use("/api/ai", aiRouter);
 
 app.use((_req, res) => {
@@ -28,7 +30,7 @@ app.use((_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`RWA AI backend listening on http://localhost:${PORT}`);
+  console.log(`Marketplace AI backend listening on http://localhost:${PORT}`);
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn(
       "ANTHROPIC_API_KEY is not set - /api/ai/* routes will return 503 until it is configured (see .env.example)."

@@ -2,7 +2,7 @@
   "name": "crypto-ai-rwa-platform",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-assisted Real World Asset (RWA) tokenization platform: Solana/Anchor program + Claude-powered risk/due-diligence backend + React dApp frontend",
+  "description": "Peer-to-peer marketplace (property + general items) with SOL escrow: Solana/Anchor program + Claude-powered listing screening/pricing/chat/dispute backend + React dApp frontend",
   "workspaces": [
     "app/backend",
     "app/frontend"
@@ -16,7 +16,6 @@
   },
   "devDependencies": {
     "@coral-xyz/anchor": "^0.30.1",
-    "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.95.3",
     "@types/chai": "^4.3.16",
     "@types/mocha": "^10.0.7",
