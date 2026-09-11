@@ -1,77 +1,44 @@
+import { getPool, isDbEnabled } from "../db/pool.js";
 import type { DisputeMessage, Order } from "../types.js";
+import { seedOrders } from "./seedData.js";
 
 /**
- * In-memory demo order (escrow) store - mirrors the on-chain `Order`
- * accounts. See data/listings.ts for the same pattern/caveat: swap for a
- * database, or for reading real on-chain accounts, without touching routes.
+ * Order (escrow) store - mirrors the pattern in data/listings.ts:
+ * Postgres-backed when DATABASE_URL is set, in-memory otherwise.
  */
-const orders = new Map<string, Order>();
 
-function seed() {
-  const demo: Order[] = [
-    {
-      id: "order-1",
-      onChainOrderId: 0,
-      listingId: "listing-2",
-      buyerName: "buyer-jane",
-      amountLamports: 22_000_000,
-      status: "Funded",
-      disputeReasonUri: null,
-      disputeMessages: [],
-      createdAt: "2026-08-25T09:00:00.000Z",
-    },
-    {
-      id: "order-2",
-      onChainOrderId: 0,
-      listingId: "listing-6",
-      buyerName: "buyer-tom",
-      amountLamports: 3_200_000,
-      status: "Disputed",
-      disputeReasonUri: "ipfs://dispute-evidence-order-2",
-      disputeMessages: [
-        {
-          author: "buyer",
-          content:
-            "The bike arrived with a cracked frame near the rear shock mount - not mentioned in the listing at all. I have photos. I don't think this is safe to ride and I'd like a refund.",
-          createdAt: "2026-08-29T10:00:00.000Z",
-        },
-        {
-          author: "seller",
-          content:
-            "The bike left me in perfect condition - I have a video from the day before shipping showing no damage. This must have happened in transit with the courier, not something I did.",
-          createdAt: "2026-08-29T15:30:00.000Z",
-        },
-        {
-          author: "buyer",
-          content:
-            "The box itself wasn't damaged at all, no crush marks, which is why I don't think this was a shipping issue. Still happy to share my unboxing photos for reference.",
-          createdAt: "2026-08-29T16:10:00.000Z",
-        },
-      ],
-      createdAt: "2026-08-27T11:00:00.000Z",
-    },
-  ];
+const memoryStore = new Map<string, Order>(seedOrders.map((o) => [o.id, o]));
 
-  for (const order of demo) orders.set(order.id, order);
-}
-seed();
-
-export function listOrders(filter?: { listingId?: string }): Order[] {
-  const all = Array.from(orders.values());
-  if (filter?.listingId) return all.filter((o) => o.listingId === filter.listingId);
-  return all;
+export async function listOrders(filter?: { listingId?: string }): Promise<Order[]> {
+  let all: Order[];
+  if (isDbEnabled()) {
+    const { rows } = await getPool().query<{ data: Order }>(
+      "SELECT data FROM orders ORDER BY created_at"
+    );
+    all = rows.map((r) => r.data);
+  } else {
+    all = Array.from(memoryStore.values());
+  }
+  return filter?.listingId ? all.filter((o) => o.listingId === filter.listingId) : all;
 }
 
-export function getOrder(id: string): Order | undefined {
-  return orders.get(id);
+export async function getOrder(id: string): Promise<Order | undefined> {
+  if (isDbEnabled()) {
+    const { rows } = await getPool().query<{ data: Order }>(
+      "SELECT data FROM orders WHERE id = $1",
+      [id]
+    );
+    return rows[0]?.data;
+  }
+  return memoryStore.get(id);
 }
 
-export function createOrder(input: {
+export async function createOrder(input: {
   listingId: string;
   buyerName: string;
   amountLamports: number;
-}): Order {
-  const id = `order-${orders.size + 1}-${Date.now().toString(36)}`;
+}): Promise<Order> {
+  const id = `order-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const order: Order = {
     id,
     onChainOrderId: null,
@@ -83,22 +50,36 @@ export function createOrder(input: {
     disputeMessages: [],
     createdAt: new Date().toISOString(),
   };
-  orders.set(id, order);
+
+  if (isDbEnabled()) {
+    await getPool().query(
+      "INSERT INTO orders (id, listing_id, data, created_at) VALUES ($1, $2, $3, $4)",
+      [id, order.listingId, order, order.createdAt]
+    );
+  } else {
+    memoryStore.set(id, order);
+  }
   return order;
 }
 
-export function updateOrder(id: string, patch: Partial<Order>): Order | undefined {
-  const existing = orders.get(id);
+export async function updateOrder(id: string, patch: Partial<Order>): Promise<Order | undefined> {
+  const existing = await getOrder(id);
   if (!existing) return undefined;
   const updated = { ...existing, ...patch };
-  orders.set(id, updated);
+
+  if (isDbEnabled()) {
+    await getPool().query("UPDATE orders SET data = $2 WHERE id = $1", [id, updated]);
+  } else {
+    memoryStore.set(id, updated);
+  }
   return updated;
 }
 
-export function addDisputeMessage(id: string, message: DisputeMessage): Order | undefined {
-  const existing = orders.get(id);
+export async function addDisputeMessage(
+  id: string,
+  message: DisputeMessage
+): Promise<Order | undefined> {
+  const existing = await getOrder(id);
   if (!existing) return undefined;
-  const updated = { ...existing, disputeMessages: [...existing.disputeMessages, message] };
-  orders.set(id, updated);
-  return updated;
+  return updateOrder(id, { disputeMessages: [...existing.disputeMessages, message] });
 }

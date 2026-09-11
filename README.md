@@ -8,9 +8,10 @@ and briefs the human arbitrator when a dispute is opened.
 
 > **Status: reference implementation / scaffold.** The Anchor program
 > compiles cleanly (`cargo check` passes) and the backend + frontend build
-> and run end-to-end against an in-memory demo dataset. The program has
-> **not been deployed** to any cluster - this sandbox has no Solana/Anchor
-> CLI available (see [Known limitations](#known-limitations--how-to-finish-the-loop)
+> and run end-to-end - Postgres-backed and persistent when `DATABASE_URL`
+> is set, an in-memory demo dataset otherwise. The program has **not been
+> deployed** to any cluster - this sandbox has no Solana/Anchor CLI
+> available (see [Known limitations](#known-limitations--how-to-finish-the-loop)
 > for exactly what that means and how to close the gap).
 
 ## The model
@@ -153,8 +154,15 @@ cp app/backend/.env.example app/backend/.env
 npm run dev:backend      # http://localhost:8787
 ```
 
-`GET /api/health` reports whether the AI key is configured and whether the
-configured Solana RPC/program is reachable.
+That's enough to run everything except the arbitrator actions (resolving a
+dispute, its AI summary, applying a fraud score), which need `ADMIN_TOKEN`
+set - any string works locally. Leave `DATABASE_URL` unset to use the
+in-memory store, or point it at a local Postgres to test persistence (see
+`.env.example` for the connection string shape).
+
+`GET /api/health` reports whether the AI key, the database, and the admin
+token are configured, and whether the configured Solana RPC/program is
+reachable.
 
 ### 3. Frontend
 
@@ -178,42 +186,67 @@ simulation, not a live chain. Two pieces to host: the Express backend (a
 long-running Node process, not a static file) and the Vite frontend (a
 static build).
 
-**Fastest path - Render, one account, both services from `render.yaml`:**
+**Fastest path - Render, one account, everything from `render.yaml`:**
 
 1. Push this repo to GitHub (already done if you're reading this on a
    pushed branch).
 2. In the [Render dashboard](https://dashboard.render.com/): **New →
    Blueprint**, pick this repo. Render reads `render.yaml` at the repo root
-   and provisions two services: `marketai-backend` (Node web service) and
-   `marketai-frontend` (static site), each built from its own `rootDir`.
+   and provisions three things: a free Postgres database (`marketai-db`),
+   the backend (`marketai-backend`, a Node web service), and the frontend
+   (`marketai-frontend`, a static site).
 3. Render will pause on `ANTHROPIC_API_KEY` (marked `sync: false` in the
    blueprint so a real key never gets committed) - paste your key into the
-   backend service's Environment tab.
-4. Both services get a `https://<service-name>.onrender.com` URL by
+   backend service's Environment tab. `DATABASE_URL` and `ADMIN_TOKEN` are
+   wired up automatically - Postgres's connection string is injected from
+   the database resource, and `ADMIN_TOKEN` is a random secret Render
+   generates for you (`generateValue: true`). Find that generated value
+   afterward in the backend service's Environment tab - you'll need it to
+   unlock the arbitrator actions on `/disputes`.
+4. Both web services get a `https://<service-name>.onrender.com` URL by
    default. `render.yaml` already points `VITE_API_BASE_URL` at the backend
    service's URL and `CORS_ORIGIN` at the frontend's, using the service
    names above - if you rename either service, update both.
 5. Deploy. First build takes a few minutes; the free tier backend spins
    down after inactivity and takes ~30s to wake on the next request (fine
    for a demo, upgrade the plan for something you don't want to feel slow).
+   The free Postgres tier is deleted after 30 days of inactivity - fine for
+   a demo, upgrade before that matters to you.
 
 **Equally valid alternative** - frontend on Vercel/Netlify (Vite is a
-first-class preset on both) + backend on Render/Railway/Fly.io. Same idea:
-set `VITE_API_BASE_URL` on the frontend host to wherever the backend ends
-up, and `CORS_ORIGIN` on the backend to wherever the frontend ends up.
+first-class preset on both) + backend on Render/Railway/Fly.io + a
+Postgres instance from any of those or a dedicated provider (Neon,
+Supabase). Same idea: set `VITE_API_BASE_URL` on the frontend host to
+wherever the backend ends up, `CORS_ORIGIN` on the backend to wherever the
+frontend ends up, and `DATABASE_URL`/`ADMIN_TOKEN` on the backend by hand.
+
+**What's already handled**, so you don't need to think about it before
+sharing a link:
+
+- **Listings/orders persist in Postgres** once `DATABASE_URL` is set - the
+  schema is created and demo data seeded automatically on first boot (see
+  `src/db/migrate.ts`), and every write survives restarts/redeploys after
+  that. No `DATABASE_URL` set (e.g. running locally with no `.env`) falls
+  back to an in-memory store that resets every restart - fine for quick
+  local dev, not for a link you're sharing.
+- **Arbitrator actions require `ADMIN_TOKEN`** - resolving a dispute,
+  generating its AI summary, and applying a fraud score to a listing all
+  return `401` without the correct token, both from the API directly and
+  from the frontend's `/disputes` page (which prompts for the token once
+  and remembers it in that browser's `localStorage`). This is a single
+  shared secret, not a real accounts/roles system - fine for one or a
+  handful of trusted arbitrators, not a substitute for proper staff auth
+  if this grows a real team.
 
 **Before pointing real users at it:**
 
-- **The demo data is in-memory** (`app/backend/src/data/*.ts`) - it resets
-  every time the backend restarts or redeploys. Fine for a demo link,
-  wrong for anything real; swap in a real database (Render/Railway both
-  offer a free Postgres tier) before that matters to you.
-- **`resolve_dispute` has no auth gate in this UI** - anyone who finds
-  `/disputes` can resolve a case. Put that behind real admin auth before
-  it's public.
 - **A custom domain** works on either host by adding it in that service's
   dashboard and pointing your DNS (a CNAME, usually) at the value they
   give you.
+- **Rotate `ADMIN_TOKEN`** if you ever suspect it leaked (shared with the
+  wrong person, committed by accident, etc.) - update it in the host's
+  Environment tab and share the new value only with whoever should have
+  arbitrator access.
 
 ### 5. The Anchor program
 
@@ -256,10 +289,12 @@ so a few things are honestly stubbed rather than faked:
   typed `Program<EscrowMarketplace>` is a strict improvement (compile-time
   checked accounts/args) and the manual encoder can be deleted.
 - **`resolve_dispute` isn't wired to a wallet in the UI.** The Disputes
-  page's resolve buttons call the backend's demo endpoint directly. On a
-  real deployment, resolving a dispute is an authority-signed on-chain
-  instruction - it belongs behind an admin/arbitrator auth flow, not a
-  button any visitor can click.
+  page's resolve buttons call the backend's demo endpoint directly
+  (gated by `ADMIN_TOKEN` - see "Publishing this live" above - not open to
+  every visitor). On a real deployment, resolving a dispute is an
+  authority-signed on-chain instruction; the admin token is a reasonable
+  stand-in for a small team, but it isn't the same as requiring the
+  platform's actual authority keypair to sign.
 - **Anchor's own IDL/TS types aren't generated**, so `tests/escrow_marketplace.ts`
   imports a `../target/types/escrow_marketplace` module that only exists
   after `anchor build`. The test file was written against the program's

@@ -1,8 +1,13 @@
-# Render Blueprint - deploys both services from this one repo.
-# In the Render dashboard: New -> Blueprint -> pick this repo -> it reads
-# this file and provisions both services below. See the README's
-# "Publishing this live" section for the full walkthrough, including which
-# env vars need a real value entered by hand (marked `sync: false`).
+# Render Blueprint - deploys the backend, frontend, and a Postgres database
+# from this one repo. In the Render dashboard: New -> Blueprint -> pick this
+# repo -> it reads this file and provisions everything below. See the
+# README's "Publishing this live" section for the full walkthrough,
+# including which env vars need a real value entered by hand (marked
+# `sync: false`).
+databases:
+  - name: marketai-db
+    plan: free
+
 services:
   - type: web
     name: marketai-backend
@@ -15,6 +20,12 @@ services:
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false # set this by hand in the Render dashboard - never commit a real key
+      - key: ADMIN_TOKEN
+        generateValue: true # Render generates a random secret - view it in the dashboard's Environment tab to use the Disputes/arbitrator page
+      - key: DATABASE_URL
+        fromDatabase:
+          name: marketai-db
+          property: connectionString
       - key: CORS_ORIGIN
         value: https://marketai-frontend.onrender.com
       - key: SOLANA_RPC_URL

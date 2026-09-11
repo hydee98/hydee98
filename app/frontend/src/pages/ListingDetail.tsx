@@ -2,6 +2,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { AdminGate } from "../components/AdminGate";
 import { FraudBadge } from "../components/FraudBadge";
 import { ListingStatusBadge } from "../components/ListingStatusBadge";
 import { lamportsToSol } from "../lib/solana";
@@ -163,14 +164,18 @@ function AiPanel<T>({
   applyKind?: "fraud";
 }) {
   const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   const applyFraudReview = async () => {
     if (!listingId || applyKind !== "fraud" || !state.data) return;
     const screening = state.data as unknown as FraudScreening;
     setApplying(true);
+    setApplyError(null);
     try {
       await api.reviewListing(listingId, screening.score, screening.flags);
       onApplied?.();
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : "Failed to apply score");
     } finally {
       setApplying(false);
     }
@@ -187,9 +192,12 @@ function AiPanel<T>({
       {state.error && <p className="error-banner">{state.error}</p>}
       {state.data && render(state.data)}
       {state.data && applyKind === "fraud" && (
-        <button onClick={applyFraudReview} disabled={applying} className="secondary-button">
-          {applying ? "Applying…" : "Apply this score to the listing"}
-        </button>
+        <AdminGate prompt="Applying a score is an authority action - enter the admin key.">
+          {applyError && <p className="error-banner">{applyError}</p>}
+          <button onClick={applyFraudReview} disabled={applying} className="secondary-button">
+            {applying ? "Applying…" : "Apply this score to the listing"}
+          </button>
+        </AdminGate>
       )}
       {!state.data && !state.error && !state.loading && (
         <p className="muted">Not yet generated for this listing.</p>

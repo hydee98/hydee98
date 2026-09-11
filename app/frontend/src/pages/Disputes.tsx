@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { AdminGate } from "../components/AdminGate";
 import { lamportsToSol } from "../lib/solana";
 import type { DisputeSummary, Listing, Order } from "../types";
 
@@ -32,16 +33,18 @@ export function Disputes() {
         wallet can do.
       </p>
 
-      {orders.length === 0 && <p className="muted">No open disputes.</p>}
+      <AdminGate prompt="Enter the arbitrator admin key to view and resolve disputes.">
+        {orders.length === 0 && <p className="muted">No open disputes.</p>}
 
-      {orders.map((order) => (
-        <DisputeCard
-          key={order.id}
-          order={order}
-          listing={listings[order.listingId]}
-          onResolved={load}
-        />
-      ))}
+        {orders.map((order) => (
+          <DisputeCard
+            key={order.id}
+            order={order}
+            listing={listings[order.listingId]}
+            onResolved={load}
+          />
+        ))}
+      </AdminGate>
     </div>
   );
 }

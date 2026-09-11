@@ -1,150 +1,46 @@
+import { getPool, isDbEnabled } from "../db/pool.js";
 import type { Listing } from "../types.js";
+import { seedListings } from "./seedData.js";
 
 /**
- * In-memory demo listing store. A real deployment would read the canonical
- * listing list from the on-chain `Listing` accounts (see solanaService.ts)
- * and keep this only as an off-chain metadata cache (full description,
- * photos) keyed by the same id. Swap this module for a database without
- * touching the routes.
+ * Listing store - Postgres-backed when DATABASE_URL is set, otherwise an
+ * in-memory Map seeded from seedData.ts. Every function is async so routes
+ * don't need to change when you switch backends. A real deployment would
+ * eventually read the canonical listing list from the on-chain `Listing`
+ * accounts (see solanaService.ts) and keep this only as an off-chain
+ * metadata cache (full description, photos) keyed by the same id.
  */
-const listings = new Map<string, Listing>();
 
-function seed() {
-  const demo: Listing[] = [
-    {
-      id: "listing-1",
-      onChainListingId: 0,
-      seller: null,
-      category: "Property",
-      listingType: "ForSale",
-      title: "3-bed semi-detached house, Chorlton",
-      description:
-        "Well-presented three-bedroom semi in a popular Chorlton street, five minutes' walk from the metrolink. Recently renovated kitchen, south-facing garden, off-road parking for two cars. Chain-free.",
-      location: "Manchester, M21",
-      images: ["https://images.example/listing-1-a.jpg", "https://images.example/listing-1-b.jpg"],
-      priceLamports: 2_850_000_000, // 2.85 SOL (demo escrow amount)
-      guidePriceGBP: 285_000,
-      status: "Active",
-      aiFraudScore: 8,
-      aiFraudFlags: [],
-      createdAt: "2026-06-01T09:00:00.000Z",
-    },
-    {
-      id: "listing-2",
-      onChainListingId: 1,
-      seller: null,
-      category: "Property",
-      listingType: "ToLet",
-      title: "2-bed flat to rent, Northern Quarter",
-      description:
-        "Modern 2-bedroom apartment in the heart of the Northern Quarter. Available now, unfurnished. First month's rent + deposit held in escrow, released to the landlord once you confirm move-in.",
-      location: "Manchester, M4",
-      images: ["https://images.example/listing-2-a.jpg"],
-      priceLamports: 22_000_000, // ~1 month rent + deposit, demo pricing
-      guidePriceGBP: 1_100,
-      status: "UnderOffer", // has a Funded order in progress - see data/orders.ts
-      aiFraudScore: 15,
-      aiFraudFlags: [],
-      createdAt: "2026-06-10T14:00:00.000Z",
-    },
-    {
-      id: "listing-3",
-      onChainListingId: 2,
-      seller: null,
-      category: "Item",
-      listingType: "ForSale",
-      title: "iPhone 14 Pro, 256GB, mint condition",
-      description:
-        "Barely used iPhone 14 Pro in Deep Purple, 256GB. Always in a case with screen protector, battery health 96%. Comes with original box and charger. Local collection or shipped tracked.",
-      location: "N/A",
-      images: ["https://images.example/listing-3-a.jpg"],
-      priceLamports: 6_500_000,
-      guidePriceGBP: 650,
-      status: "Active",
-      aiFraudScore: 12,
-      aiFraudFlags: [],
-      createdAt: "2026-07-01T10:30:00.000Z",
-    },
-    {
-      id: "listing-4",
-      onChainListingId: 3,
-      seller: null,
-      category: "Item",
-      listingType: "ForSale",
-      title: "Brand new sealed laptops, half price, must sell today",
-      description:
-        "Got 5 brand new laptops sealed in box, selling half price because moving abroad tomorrow. No returns, no meetups, payment must be sent in full before shipping. Message me directly off-platform for the fastest deal.",
-      location: "N/A",
-      images: ["https://images.example/listing-4-a.jpg"],
-      priceLamports: 4_000_000,
-      guidePriceGBP: 400,
-      status: "Flagged",
-      aiFraudScore: 88,
-      aiFraudFlags: [
-        "Pressure tactics (\"must sell today\")",
-        "Discourages platform escrow / pushes off-platform payment",
-        "No-returns + unusually steep discount combination",
-        "Seller has no listing history",
-      ],
-      createdAt: "2026-07-15T18:20:00.000Z",
-    },
-    {
-      id: "listing-5",
-      onChainListingId: null,
-      seller: null,
-      category: "Item",
-      listingType: "ForSale",
-      title: "Vintage 1978 Fender Telecaster",
-      description:
-        "Original 1978 Fender Telecaster, natural finish. Some finish checking consistent with age, frets recently professionally re-levelled. Comes with hard case and a copy of the original receipt.",
-      location: "N/A",
-      images: ["https://images.example/listing-5-a.jpg"],
-      priceLamports: 18_000_000,
-      guidePriceGBP: 1_800,
-      status: "PendingReview",
-      aiFraudScore: null,
-      aiFraudFlags: [],
-      createdAt: "2026-08-20T11:00:00.000Z",
-    },
-    {
-      id: "listing-6",
-      onChainListingId: 4,
-      seller: null,
-      category: "Item",
-      listingType: "ForSale",
-      title: "Mountain bike, full suspension",
-      description:
-        "2023 full-suspension mountain bike, size medium. Ridden maybe a dozen times. Selling as I've switched to road cycling.",
-      location: "N/A",
-      images: ["https://images.example/listing-6-a.jpg"],
-      priceLamports: 3_200_000,
-      guidePriceGBP: 320,
-      status: "UnderOffer", // has a Disputed order in progress - see data/orders.ts
-      aiFraudScore: 18,
-      aiFraudFlags: [],
-      createdAt: "2026-07-28T13:00:00.000Z",
-    },
-  ];
+const memoryStore = new Map<string, Listing>(seedListings.map((l) => [l.id, l]));
 
-  for (const listing of demo) listings.set(listing.id, listing);
-}
-seed();
-
-export function listListings(): Listing[] {
-  return Array.from(listings.values());
+export async function listListings(): Promise<Listing[]> {
+  if (isDbEnabled()) {
+    const { rows } = await getPool().query<{ data: Listing }>(
+      "SELECT data FROM listings ORDER BY created_at"
+    );
+    return rows.map((r) => r.data);
+  }
+  return Array.from(memoryStore.values());
 }
 
-export function getListing(id: string): Listing | undefined {
-  return listings.get(id);
+export async function getListing(id: string): Promise<Listing | undefined> {
+  if (isDbEnabled()) {
+    const { rows } = await getPool().query<{ data: Listing }>(
+      "SELECT data FROM listings WHERE id = $1",
+      [id]
+    );
+    return rows[0]?.data;
+  }
+  return memoryStore.get(id);
 }
 
-export function createListing(
+export async function createListing(
   input: Omit<
     Listing,
     "id" | "createdAt" | "status" | "aiFraudScore" | "aiFraudFlags" | "onChainListingId" | "seller"
   >
-): Listing {
-  const id = `listing-${listings.size + 1}-${Date.now().toString(36)}`;
+): Promise<Listing> {
+  const id = `listing-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const listing: Listing = {
     ...input,
     id,
@@ -155,14 +51,30 @@ export function createListing(
     aiFraudFlags: [],
     createdAt: new Date().toISOString(),
   };
-  listings.set(id, listing);
+
+  if (isDbEnabled()) {
+    await getPool().query(
+      "INSERT INTO listings (id, data, created_at) VALUES ($1, $2, $3)",
+      [id, listing, listing.createdAt]
+    );
+  } else {
+    memoryStore.set(id, listing);
+  }
   return listing;
 }
 
-export function updateListing(id: string, patch: Partial<Listing>): Listing | undefined {
-  const existing = listings.get(id);
+export async function updateListing(
+  id: string,
+  patch: Partial<Listing>
+): Promise<Listing | undefined> {
+  const existing = await getListing(id);
   if (!existing) return undefined;
   const updated = { ...existing, ...patch };
-  listings.set(id, updated);
+
+  if (isDbEnabled()) {
+    await getPool().query("UPDATE listings SET data = $2 WHERE id = $1", [id, updated]);
+  } else {
+    memoryStore.set(id, updated);
+  }
   return updated;
 }

@@ -1,6 +1,8 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
+import { ensureSchema } from "./db/migrate.js";
+import { isDbEnabled } from "./db/pool.js";
 import { aiRouter } from "./routes/ai.js";
 import { listingsRouter } from "./routes/listings.js";
 import { ordersRouter } from "./routes/orders.js";
@@ -21,6 +23,8 @@ app.get("/api/health", async (_req, res) => {
   res.json({
     ok: true,
     aiConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+    adminConfigured: Boolean(process.env.ADMIN_TOKEN),
+    dbEnabled: isDbEnabled(),
     solana,
   });
 });
@@ -33,11 +37,42 @@ app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Marketplace AI backend listening on http://localhost:${PORT}`);
-  if (!process.env.ANTHROPIC_API_KEY) {
+// Final error handler - catches anything asyncHandler() forwards via
+// next(err), so a DB/unexpected error becomes a JSON 500 instead of
+// Express's default HTML error page (or a hung request).
+app.use(
+  (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error(err);
+    res.status(500).json({ error: "Unexpected server error" });
+  }
+);
+
+async function main() {
+  if (isDbEnabled()) {
+    await ensureSchema();
+    console.log("Connected to database - listings/orders persist across restarts.");
+  } else {
     console.warn(
-      "ANTHROPIC_API_KEY is not set - /api/ai/* routes will return 503 until it is configured (see .env.example)."
+      "DATABASE_URL is not set - using an in-memory store that resets on every restart (see .env.example)."
     );
   }
+
+  app.listen(PORT, () => {
+    console.log(`Marketplace AI backend listening on http://localhost:${PORT}`);
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.warn(
+        "ANTHROPIC_API_KEY is not set - /api/ai/* routes will return 503 until it is configured (see .env.example)."
+      );
+    }
+    if (!process.env.ADMIN_TOKEN) {
+      console.warn(
+        "ADMIN_TOKEN is not set - arbitrator/authority actions (resolve dispute, review listing, dispute summary) will return 503 until it is configured (see .env.example)."
+      );
+    }
+  });
+}
+
+main().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });
