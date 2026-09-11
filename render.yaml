@@ -1,0 +1,39 @@
+# Render Blueprint - deploys both services from this one repo.
+# In the Render dashboard: New -> Blueprint -> pick this repo -> it reads
+# this file and provisions both services below. See the README's
+# "Publishing this live" section for the full walkthrough, including which
+# env vars need a real value entered by hand (marked `sync: false`).
+services:
+  - type: web
+    name: marketai-backend
+    runtime: node
+    plan: free
+    rootDir: app/backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false # set this by hand in the Render dashboard - never commit a real key
+      - key: CORS_ORIGIN
+        value: https://marketai-frontend.onrender.com
+      - key: SOLANA_RPC_URL
+        value: https://api.devnet.solana.com
+      - key: MARKETPLACE_PROGRAM_ID
+        value: Byjh8A9Zir4PXUPUDJufmC6xoii5LN9W2omdt5D9LUuw
+
+  - type: web
+    name: marketai-frontend
+    runtime: static
+    rootDir: app/frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://marketai-backend.onrender.com
+    routes:
+      # React Router uses client-side routing - unknown paths (e.g.
+      # /listing/abc on a hard refresh) must still serve index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html

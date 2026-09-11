@@ -9,7 +9,11 @@ import { fetchClusterStatus } from "./services/solanaService.js";
 const app = express();
 const PORT = Number(process.env.PORT) || 8787;
 
-app.use(cors());
+// In production, restrict this to your deployed frontend's origin(s) via
+// CORS_ORIGIN (comma-separated for multiple). Left permissive by default
+// so local dev and quick demos don't need any config.
+const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map((o) => o.trim());
+app.use(cors(allowedOrigins ? { origin: allowedOrigins } : {}));
 app.use(express.json());
 
 app.get("/api/health", async (_req, res) => {

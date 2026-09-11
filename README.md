@@ -170,7 +170,52 @@ AI fraud/price panels, chat about a listing, and walk through Buy It Now →
 Orders → confirm receipt or open a dispute → Disputes (arbitrator view with
 the AI summary).
 
-### 4. The Anchor program
+### 4. Publishing this live
+
+You don't need the Solana program deployed to put the demo on a real URL -
+the current build's Buy It Now flow runs through the backend's own escrow
+simulation, not a live chain. Two pieces to host: the Express backend (a
+long-running Node process, not a static file) and the Vite frontend (a
+static build).
+
+**Fastest path - Render, one account, both services from `render.yaml`:**
+
+1. Push this repo to GitHub (already done if you're reading this on a
+   pushed branch).
+2. In the [Render dashboard](https://dashboard.render.com/): **New →
+   Blueprint**, pick this repo. Render reads `render.yaml` at the repo root
+   and provisions two services: `marketai-backend` (Node web service) and
+   `marketai-frontend` (static site), each built from its own `rootDir`.
+3. Render will pause on `ANTHROPIC_API_KEY` (marked `sync: false` in the
+   blueprint so a real key never gets committed) - paste your key into the
+   backend service's Environment tab.
+4. Both services get a `https://<service-name>.onrender.com` URL by
+   default. `render.yaml` already points `VITE_API_BASE_URL` at the backend
+   service's URL and `CORS_ORIGIN` at the frontend's, using the service
+   names above - if you rename either service, update both.
+5. Deploy. First build takes a few minutes; the free tier backend spins
+   down after inactivity and takes ~30s to wake on the next request (fine
+   for a demo, upgrade the plan for something you don't want to feel slow).
+
+**Equally valid alternative** - frontend on Vercel/Netlify (Vite is a
+first-class preset on both) + backend on Render/Railway/Fly.io. Same idea:
+set `VITE_API_BASE_URL` on the frontend host to wherever the backend ends
+up, and `CORS_ORIGIN` on the backend to wherever the frontend ends up.
+
+**Before pointing real users at it:**
+
+- **The demo data is in-memory** (`app/backend/src/data/*.ts`) - it resets
+  every time the backend restarts or redeploys. Fine for a demo link,
+  wrong for anything real; swap in a real database (Render/Railway both
+  offer a free Postgres tier) before that matters to you.
+- **`resolve_dispute` has no auth gate in this UI** - anyone who finds
+  `/disputes` can resolve a case. Put that behind real admin auth before
+  it's public.
+- **A custom domain** works on either host by adding it in that service's
+  dashboard and pointing your DNS (a CNAME, usually) at the value they
+  give you.
+
+### 5. The Anchor program
 
 ```bash
 anchor build   # requires the Solana/Anchor CLI
