@@ -17,14 +17,23 @@ const PORT = Number(process.env.PORT) || 8787;
 // In production, restrict this to your deployed frontend's origin(s) via
 // CORS_ORIGIN (comma-separated for multiple). Left permissive by default
 // so local dev and quick demos don't need any config. render.yaml wires
-// this up via `fromService`, whose `host` property is a bare hostname
-// with no scheme (and resolves to whatever host Render actually assigned
-// the frontend, suffix and all) - normalize each entry rather than
-// require the env var to already include a scheme.
+// this up via `fromService`, whose `host` property turns out to return
+// Render's *internal* private-network service slug (e.g.
+// "marketai-frontend-xyz"), not the public "*.onrender.com" hostname the
+// browser's Origin header actually carries - confirmed by inspecting the
+// deployed value. The slug is always the same string as the public
+// subdomain though, so reconstruct it below.
+function resolveOrigin(raw: string): string {
+  let value = raw.trim();
+  if (!/^https?:\/\//.test(value) && !value.includes(".")) {
+    value = `${value}.onrender.com`;
+  }
+  return /^https?:\/\//.test(value) ? value : `https://${value}`;
+}
 const allowedOrigins = process.env.CORS_ORIGIN?.split(",")
   .map((o) => o.trim())
   .filter(Boolean)
-  .map((o) => (/^https?:\/\//.test(o) ? o : `https://${o}`));
+  .map(resolveOrigin);
 app.use(cors(allowedOrigins?.length ? { origin: allowedOrigins } : {}));
 // Raised from Express's 100kb default - listing creation can carry a
 // handful of client-compressed photo data URLs in the JSON body.

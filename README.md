@@ -325,16 +325,23 @@ static build).
    else's Render service**, in which case Render silently appends a
    `-xxxx` suffix (e.g. `marketai-backend-a1b2.onrender.com`) instead.
    `render.yaml` sets `VITE_API_BASE_URL` and `CORS_ORIGIN` via `fromService`
-   rather than a hardcoded guess at the clean URL, specifically so this
-   resolves to whichever host Render actually assigned, suffix and all -
+   rather than a hardcoded guess at the clean URL, so this tracks whichever
+   suffix Render actually assigned instead of drifting out of sync -
    if you ever see wallet sign-in fail with a bare "Request failed with
    status 404" (no specific error message), that's this exact mismatch:
    the frontend was built against a backend URL that doesn't exist.
-   Redeploying from an updated `render.yaml` fixes it automatically; to
-   confirm without waiting on a build, open both services' Environment
-   tabs in the Render dashboard and check `VITE_API_BASE_URL` actually
-   matches the backend's real `.onrender.com` URL (and `CORS_ORIGIN`
-   matches the frontend's).
+   `fromService`'s `host` property actually returns Render's *internal*
+   private-network service slug (e.g. `marketai-backend-a1b2`, no
+   `.onrender.com` suffix - confirmed by inspecting a deployed value, not
+   just Render's docs), not the public hostname a browser can resolve;
+   `api/client.ts` and the backend's `index.ts` both reconstruct the public
+   `.onrender.com` hostname from that slug at runtime, since the two are
+   always the same string. Redeploying from an updated `render.yaml` fixes
+   this automatically; to confirm without waiting on a build, open both
+   services' Environment tabs in the Render dashboard, reveal
+   `VITE_API_BASE_URL`/`CORS_ORIGIN`, and check the slug shown there
+   matches the other service's actual name (suffix and all) in its own
+   dashboard header.
 5. Deploy. First build takes a few minutes; the free tier backend spins
    down after inactivity and takes ~30s to wake on the next request (fine
    for a demo, upgrade the plan for something you don't want to feel slow).

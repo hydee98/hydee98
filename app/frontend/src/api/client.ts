@@ -18,11 +18,25 @@ import { clearSession, getSessionToken, type SessionUser } from "../lib/session"
  * whatever host Render actually assigned the backend (which gets a
  * `-xxxx` suffix appended whenever the plain service name is already
  * taken), rather than a hardcoded guess that silently 404s once that
- * happens. `fromService`'s `host` property returns a bare hostname with
- * no scheme, so normalize it here rather than assume the env var always
- * includes one. */
-const rawApiBase = import.meta.env.VITE_API_BASE_URL ?? "";
-const API_BASE = rawApiBase && !/^https?:\/\//.test(rawApiBase) ? `https://${rawApiBase}` : rawApiBase;
+ * happens.
+ *
+ * `fromService`'s `host` property turns out to return Render's *internal*
+ * private-network service slug (e.g. "marketai-backend-msqc"), not the
+ * public "*.onrender.com" hostname a browser can actually resolve -
+ * confirmed by inspecting the deployed value. The slug is always the same
+ * string as the public subdomain though, so reconstruct the public
+ * hostname by appending .onrender.com whenever the value doesn't already
+ * look like a full hostname (no dot) or already carry a scheme - this
+ * keeps working if a custom domain is entered here by hand instead. */
+function resolveOrigin(raw: string): string {
+  if (!raw) return "";
+  let value = raw.trim();
+  if (!/^https?:\/\//.test(value) && !value.includes(".")) {
+    value = `${value}.onrender.com`;
+  }
+  return /^https?:\/\//.test(value) ? value : `https://${value}`;
+}
+const API_BASE = resolveOrigin(import.meta.env.VITE_API_BASE_URL ?? "");
 
 async function request<T>(
   path: string,
