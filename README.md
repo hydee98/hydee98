@@ -321,9 +321,20 @@ static build).
    before going live; for a quick demo you can paste in any valid Solana
    address (see [Economics](#economics-pricing-multi-currency-payments--the-platform-fee)).
 4. Both web services get a `https://<service-name>.onrender.com` URL by
-   default. `render.yaml` already points `VITE_API_BASE_URL` at the backend
-   service's URL and `CORS_ORIGIN` at the frontend's, using the service
-   names above - if you rename either service, update both.
+   default - **but only if that plain name isn't already taken by someone
+   else's Render service**, in which case Render silently appends a
+   `-xxxx` suffix (e.g. `marketai-backend-a1b2.onrender.com`) instead.
+   `render.yaml` sets `VITE_API_BASE_URL` and `CORS_ORIGIN` via `fromService`
+   rather than a hardcoded guess at the clean URL, specifically so this
+   resolves to whichever host Render actually assigned, suffix and all -
+   if you ever see wallet sign-in fail with a bare "Request failed with
+   status 404" (no specific error message), that's this exact mismatch:
+   the frontend was built against a backend URL that doesn't exist.
+   Redeploying from an updated `render.yaml` fixes it automatically; to
+   confirm without waiting on a build, open both services' Environment
+   tabs in the Render dashboard and check `VITE_API_BASE_URL` actually
+   matches the backend's real `.onrender.com` URL (and `CORS_ORIGIN`
+   matches the frontend's).
 5. Deploy. First build takes a few minutes; the free tier backend spins
    down after inactivity and takes ~30s to wake on the next request (fine
    for a demo, upgrade the plan for something you don't want to feel slow).

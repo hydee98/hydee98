@@ -29,7 +29,10 @@ services:
           name: marketai-db
           property: connectionString
       - key: CORS_ORIGIN
-        value: https://marketai-frontend.onrender.com
+        fromService:
+          name: marketai-frontend
+          type: web
+          property: host # bare hostname (Render appends a -xxxx suffix if "marketai-frontend" is taken) - see index.ts for the scheme normalization
       - key: SOLANA_RPC_URL
         value: https://api.devnet.solana.com
       - key: MARKETPLACE_PROGRAM_ID
@@ -49,7 +52,10 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://marketai-backend.onrender.com
+        fromService:
+          name: marketai-backend
+          type: web
+          property: host # bare hostname (Render appends a -xxxx suffix if "marketai-backend" is taken) - see api/client.ts for the scheme normalization
       - key: VITE_USDC_MINT
         value: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
       - key: VITE_TREASURY_WALLET

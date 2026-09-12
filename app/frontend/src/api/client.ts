@@ -13,8 +13,16 @@ import { clearAdminToken, getAdminToken } from "../lib/adminAuth";
 import { clearSession, getSessionToken, type SessionUser } from "../lib/session";
 
 /** In dev, Vite proxies /api/* to the backend (see vite.config.ts). In a
- * static production build, set VITE_API_BASE_URL to the backend's origin. */
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+ * static production build, set VITE_API_BASE_URL to the backend's origin -
+ * render.yaml wires this up via `fromService` so it always resolves to
+ * whatever host Render actually assigned the backend (which gets a
+ * `-xxxx` suffix appended whenever the plain service name is already
+ * taken), rather than a hardcoded guess that silently 404s once that
+ * happens. `fromService`'s `host` property returns a bare hostname with
+ * no scheme, so normalize it here rather than assume the env var always
+ * includes one. */
+const rawApiBase = import.meta.env.VITE_API_BASE_URL ?? "";
+const API_BASE = rawApiBase && !/^https?:\/\//.test(rawApiBase) ? `https://${rawApiBase}` : rawApiBase;
 
 async function request<T>(
   path: string,
