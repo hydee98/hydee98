@@ -1,39 +1,48 @@
 :root {
-  color-scheme: dark;
-  --bg: #0a0d14;
-  --bg-elevated: #0e1219;
-  --surface: #131826;
-  --surface-hover: #1a2133;
-  --surface-2: #171d2c;
-  --border: #232b3d;
-  --border-strong: #2f3950;
-  --text: #eef1f7;
-  --text-muted: #8f9ab0;
-  --text-faint: #5e6980;
+  color-scheme: light;
 
-  --accent-from: #6d6cf6;
-  --accent-to: #22d3ee;
-  --accent: #6d6cf6;
-  --accent-soft: rgba(109, 108, 246, 0.14);
+  /* Brand palette - Royal Blue / Gold, per brand guidelines */
+  --royal-blue: #000080;
+  --light-blue: #2222b2;
+  --gold: #efbf04;
+  --deep-gold: #d19f00;
+  --blueish-grey: #babacc;
 
-  --success: #34d399;
-  --success-bg: rgba(52, 211, 153, 0.14);
-  --warning: #fbbf24;
-  --warning-bg: rgba(251, 191, 36, 0.14);
-  --danger: #f87171;
-  --danger-bg: rgba(248, 113, 113, 0.14);
-  --critical: #ef4444;
-  --critical-bg: rgba(239, 68, 68, 0.16);
+  --bg: #f5f6fa;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-hover: #eceefa;
+  --surface-2: #eef0f7;
+  --border: var(--blueish-grey);
+  --border-strong: #9494ac;
+  --text: var(--royal-blue);
+  --text-muted: #55556e;
+  --text-faint: #7a7a94;
+
+  --accent-from: var(--gold);
+  --accent-to: var(--deep-gold);
+  --accent: var(--gold);
+  --accent-soft: rgba(239, 191, 4, 0.16);
+  --on-accent: var(--royal-blue);
+
+  --success: #1a9c6b;
+  --success-bg: rgba(26, 156, 107, 0.12);
+  --warning: #b8860b;
+  --warning-bg: rgba(239, 191, 4, 0.18);
+  --danger: #c0392b;
+  --danger-bg: rgba(192, 57, 43, 0.1);
+  --critical: #a5261a;
+  --critical-bg: rgba(165, 38, 26, 0.13);
 
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 20px;
   --radius-full: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 12px 28px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.45);
-  --shadow-accent: 0 10px 30px rgba(109, 108, 246, 0.28);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 40, 0.06);
+  --shadow-md: 0 12px 28px rgba(0, 0, 40, 0.1);
+  --shadow-lg: 0 24px 55px rgba(0, 0, 40, 0.14);
+  --shadow-accent: 0 10px 26px rgba(239, 191, 4, 0.35);
 
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: "Sora", "Inter", -apple-system, sans-serif;
@@ -89,12 +98,11 @@ code {
   align-items: center;
   gap: 2rem;
   padding: 0.9rem 2rem;
-  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  background: rgba(10, 13, 20, 0.82);
-  backdrop-filter: blur(10px);
+  background: linear-gradient(120deg, var(--royal-blue), var(--light-blue));
   z-index: 20;
+  box-shadow: var(--shadow-sm);
 }
 
 .brand {
@@ -102,12 +110,10 @@ code {
   font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: -0.02em;
+  color: white;
 }
 .brand-accent {
-  background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--gold);
 }
 
 .app-header nav {
@@ -116,7 +122,7 @@ code {
   flex: 1;
 }
 .app-header nav a {
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.75);
   font-weight: 600;
   font-size: 0.92rem;
   padding: 0.4rem 0;
@@ -124,11 +130,11 @@ code {
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 .app-header nav a:hover {
-  color: var(--text);
+  color: white;
 }
 .app-header nav a.active {
-  color: var(--text);
-  border-bottom-color: var(--accent-from);
+  color: white;
+  border-bottom-color: var(--gold);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -166,7 +172,7 @@ code {
   padding: 0.6rem 1.1rem;
   border-radius: var(--radius-full);
   background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
-  color: white;
+  color: var(--on-accent);
   font-weight: 700;
   font-size: 0.9rem;
   box-shadow: var(--shadow-accent);
@@ -174,7 +180,7 @@ code {
 }
 .cta-link:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 36px rgba(109, 108, 246, 0.4);
+  box-shadow: 0 14px 32px rgba(239, 191, 4, 0.45);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -226,7 +232,7 @@ code {
 }
 .filter-tab.active {
   background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
-  color: white;
+  color: var(--on-accent);
   border-color: transparent;
 }
 
@@ -282,7 +288,7 @@ code {
 .asset-card-media {
   position: relative;
   aspect-ratio: 4 / 3;
-  background: linear-gradient(160deg, #1c2333, #11151f);
+  background: linear-gradient(160deg, #eef0fb, #e3e6f5);
   overflow: hidden;
 }
 .asset-card-media img {
@@ -377,7 +383,7 @@ code {
   backdrop-filter: blur(6px);
 }
 .badge-neutral {
-  background: rgba(20, 24, 36, 0.85);
+  background: var(--surface-2);
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
@@ -402,11 +408,11 @@ code {
   color: var(--success);
 }
 .badge-status-funded {
-  background: rgba(109, 108, 246, 0.16);
-  color: #a5a4f9;
+  background: var(--accent-soft);
+  color: var(--deep-gold);
 }
 .badge-status-frozen {
-  background: rgba(20, 24, 36, 0.85);
+  background: var(--surface-2);
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
@@ -460,7 +466,7 @@ code {
   aspect-ratio: 16 / 10;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: linear-gradient(160deg, #1c2333, #11151f);
+  background: linear-gradient(160deg, #eef0fb, #e3e6f5);
   border: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -548,7 +554,7 @@ code {
 
 button {
   background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
-  color: white;
+  color: var(--on-accent);
   border: none;
   border-radius: var(--radius-sm);
   padding: 0.55rem 1.1rem;
