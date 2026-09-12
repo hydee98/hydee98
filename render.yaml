@@ -34,6 +34,12 @@ services:
         value: https://api.devnet.solana.com
       - key: MARKETPLACE_PROGRAM_ID
         value: Byjh8A9Zir4PXUPUDJufmC6xoii5LN9W2omdt5D9LUuw
+      - key: PLATFORM_FEE_BPS
+        value: "200" # 2% - taken only when a sale completes, see pricingService.ts
+      - key: USDC_MINT
+        value: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU # devnet USDC; use the mainnet mint in production
+      - key: TREASURY_WALLET
+        sync: false # set this to your real treasury wallet - see README "Economics"
 
   - type: web
     name: marketai-frontend
@@ -44,6 +50,10 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         value: https://marketai-backend.onrender.com
+      - key: VITE_USDC_MINT
+        value: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
+      - key: VITE_TREASURY_WALLET
+        sync: false # must match the backend's TREASURY_WALLET above
     routes:
       # React Router uses client-side routing - unknown paths (e.g.
       # /listing/abc on a hard refresh) must still serve index.html.

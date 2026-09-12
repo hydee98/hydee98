@@ -7,6 +7,7 @@ import { aiRouter } from "./routes/ai.js";
 import { authRouter } from "./routes/auth.js";
 import { listingsRouter } from "./routes/listings.js";
 import { ordersRouter } from "./routes/orders.js";
+import { pricingRouter } from "./routes/pricing.js";
 import { isAuthConfigured } from "./services/authService.js";
 import { fetchClusterStatus } from "./services/solanaService.js";
 
@@ -38,6 +39,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/listings", listingsRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/pricing", pricingRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

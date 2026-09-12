@@ -4,7 +4,8 @@ import { addDisputeMessage, createOrder, getOrder, listOrders, updateOrder } fro
 import { requireAdmin } from "../middleware/adminAuth.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import type { Listing, Order } from "../types.js";
+import { feeUsdFor, supportedCurrencies, usdToCurrencyAmount } from "../services/pricingService.js";
+import type { Listing, Order, PaymentCurrency } from "../types.js";
 
 export const ordersRouter = Router();
 
@@ -60,10 +61,13 @@ ordersRouter.post(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { listingId } = req.body ?? {};
+    const { listingId, paymentCurrency } = req.body ?? {};
     if (typeof listingId !== "string" || !listingId) {
       return res.status(400).json({ error: "listingId is required" });
     }
+    const currency: PaymentCurrency = supportedCurrencies().includes(paymentCurrency)
+      ? paymentCurrency
+      : "USDC";
     const listing = await getListing(listingId);
     if (!listing) return res.status(404).json({ error: "Listing not found" });
     if (listing.status !== "Active") {
@@ -73,10 +77,17 @@ ordersRouter.post(
       return res.status(400).json({ error: "You can't buy your own listing" });
     }
 
+    // Whatever the buyer pays with, the escrow itself is always funded in
+    // USDC - anything else is swapped into USDC in the buyer's own wallet
+    // first (see frontend lib/jupiterSwap.ts), so amountUsd is the amount
+    // that actually lands in the on-chain vault regardless of currency.
     const order = await createOrder({
       listingId,
       buyerWallet: req.auth!.publicKey,
-      amountLamports: listing.priceLamports,
+      amountUsd: listing.priceUsd,
+      paymentCurrency: currency,
+      paymentAmount: usdToCurrencyAmount(listing.priceUsd, currency),
+      feeUsd: feeUsdFor(listing.priceUsd),
     });
     await updateListing(listingId, { status: "UnderOffer" });
 

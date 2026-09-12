@@ -6,6 +6,7 @@ import type {
   ListingCategory,
   ListingType,
   Order,
+  PaymentCurrency,
   PriceSuggestion,
 } from "../types";
 import { clearAdminToken, getAdminToken } from "../lib/adminAuth";
@@ -73,8 +74,7 @@ export const api = {
     location: string;
     description: string;
     images: string[];
-    priceLamports: number;
-    guidePriceGBP: number;
+    priceUsd: number;
   }) =>
     request<{ listing: Listing }>("/api/listings", {
       method: "POST",
@@ -89,10 +89,10 @@ export const api = {
 
   getOrder: (id: string) => request<{ order: Order }>(`/api/orders/${id}`),
 
-  createOrder: (listingId: string) =>
+  createOrder: (listingId: string, paymentCurrency: PaymentCurrency) =>
     request<{ order: Order }>("/api/orders", {
       method: "POST",
-      body: JSON.stringify({ listingId }),
+      body: JSON.stringify({ listingId, paymentCurrency }),
       auth: true,
     }),
 
@@ -171,11 +171,22 @@ export const api = {
       auth: true,
     }),
 
+  getPricingRates: () =>
+    request<{
+      feeBps: number;
+      currencies: { currency: PaymentCurrency; usdRate: number; isPlaceholder: boolean }[];
+    }>("/api/pricing/rates"),
+
   health: () =>
     request<{
       ok: boolean;
       aiConfigured: boolean;
       authConfigured: boolean;
-      solana: { programDeployed: boolean; slot: number | null };
+      solana: {
+        programDeployed: boolean;
+        slot: number | null;
+        usdcMint: string;
+        treasuryWallet: string | null;
+      };
     }>("/api/health"),
 };

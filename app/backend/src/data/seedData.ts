@@ -1,3 +1,4 @@
+import { feeUsdFor, usdToCurrencyAmount } from "../services/pricingService.js";
 import type { Listing, Order } from "../types.js";
 
 /**
@@ -28,8 +29,7 @@ export const seedListings: Listing[] = [
       "Well-presented three-bedroom semi in a popular Chorlton street, five minutes' walk from the metrolink. Recently renovated kitchen, south-facing garden, off-road parking for two cars. Chain-free.",
     location: "Manchester, M21",
     images: ["https://images.example/listing-1-a.jpg", "https://images.example/listing-1-b.jpg"],
-    priceLamports: 2_850_000_000, // 2.85 SOL (demo escrow amount)
-    guidePriceGBP: 285_000,
+    priceUsd: 285_000,
     status: "Active",
     aiFraudScore: 8,
     aiFraudFlags: [],
@@ -46,8 +46,7 @@ export const seedListings: Listing[] = [
       "Modern 2-bedroom apartment in the heart of the Northern Quarter. Available now, unfurnished. First month's rent + deposit held in escrow, released to the landlord once you confirm move-in.",
     location: "Manchester, M4",
     images: ["https://images.example/listing-2-a.jpg"],
-    priceLamports: 22_000_000, // ~1 month rent + deposit, demo pricing
-    guidePriceGBP: 1_100,
+    priceUsd: 1_100, // ~1 month rent + deposit, demo pricing
     status: "UnderOffer", // has a Funded order in progress - see seedOrders below
     aiFraudScore: 15,
     aiFraudFlags: [],
@@ -64,8 +63,7 @@ export const seedListings: Listing[] = [
       "Barely used iPhone 14 Pro in Deep Purple, 256GB. Always in a case with screen protector, battery health 96%. Comes with original box and charger. Local collection or shipped tracked.",
     location: "N/A",
     images: ["https://images.example/listing-3-a.jpg"],
-    priceLamports: 6_500_000,
-    guidePriceGBP: 650,
+    priceUsd: 650,
     status: "Active",
     aiFraudScore: 12,
     aiFraudFlags: [],
@@ -82,8 +80,7 @@ export const seedListings: Listing[] = [
       "Got 5 brand new laptops sealed in box, selling half price because moving abroad tomorrow. No returns, no meetups, payment must be sent in full before shipping. Message me directly off-platform for the fastest deal.",
     location: "N/A",
     images: ["https://images.example/listing-4-a.jpg"],
-    priceLamports: 4_000_000,
-    guidePriceGBP: 400,
+    priceUsd: 400,
     status: "Flagged",
     aiFraudScore: 88,
     aiFraudFlags: [
@@ -105,8 +102,7 @@ export const seedListings: Listing[] = [
       "Original 1978 Fender Telecaster, natural finish. Some finish checking consistent with age, frets recently professionally re-levelled. Comes with hard case and a copy of the original receipt.",
     location: "N/A",
     images: ["https://images.example/listing-5-a.jpg"],
-    priceLamports: 18_000_000,
-    guidePriceGBP: 1_800,
+    priceUsd: 1_800,
     status: "PendingReview",
     aiFraudScore: null,
     aiFraudFlags: [],
@@ -123,8 +119,7 @@ export const seedListings: Listing[] = [
       "2023 full-suspension mountain bike, size medium. Ridden maybe a dozen times. Selling as I've switched to road cycling.",
     location: "N/A",
     images: ["https://images.example/listing-6-a.jpg"],
-    priceLamports: 3_200_000,
-    guidePriceGBP: 320,
+    priceUsd: 320,
     status: "UnderOffer", // has a Disputed order in progress - see seedOrders below
     aiFraudScore: 18,
     aiFraudFlags: [],
@@ -138,7 +133,12 @@ export const seedOrders: Order[] = [
     onChainOrderId: 0,
     listingId: "listing-2",
     buyerWallet: DEMO_BUYER_1,
-    amountLamports: 22_000_000,
+    amountUsd: 1_100,
+    // Paid with SOL - swapped into USDC in the buyer's own wallet before
+    // create_order (see lib/jupiterSwap.ts), so escrow only ever holds USDC.
+    paymentCurrency: "SOL",
+    paymentAmount: usdToCurrencyAmount(1_100, "SOL"),
+    feeUsd: feeUsdFor(1_100),
     status: "Funded",
     disputeReasonUri: null,
     disputeMessages: [],
@@ -149,7 +149,10 @@ export const seedOrders: Order[] = [
     onChainOrderId: 0,
     listingId: "listing-6",
     buyerWallet: DEMO_BUYER_1,
-    amountLamports: 3_200_000,
+    amountUsd: 320,
+    paymentCurrency: "USDC", // paid directly in USDC, no swap needed
+    paymentAmount: usdToCurrencyAmount(320, "USDC"),
+    feeUsd: feeUsdFor(320),
     status: "Disputed",
     disputeReasonUri: "ipfs://dispute-evidence-order-2",
     disputeMessages: [

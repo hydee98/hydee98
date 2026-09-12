@@ -37,11 +37,11 @@ listingsRouter.get(
     }
     const min = typeof minPrice === "string" ? Number(minPrice) : undefined;
     if (min !== undefined && !Number.isNaN(min)) {
-      results = results.filter((l) => l.guidePriceGBP >= min);
+      results = results.filter((l) => l.priceUsd >= min);
     }
     const max = typeof maxPrice === "string" ? Number(maxPrice) : undefined;
     if (max !== undefined && !Number.isNaN(max)) {
-      results = results.filter((l) => l.guidePriceGBP <= max);
+      results = results.filter((l) => l.priceUsd <= max);
     }
 
     res.json({ listings: results });
@@ -68,8 +68,7 @@ listingsRouter.post(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { title, category, listingType, location, description, images, priceLamports, guidePriceGBP } =
-      req.body ?? {};
+    const { title, category, listingType, location, description, images, priceUsd } = req.body ?? {};
 
     if (typeof title !== "string" || !title.trim()) {
       return res.status(400).json({ error: "title is required" });
@@ -83,11 +82,8 @@ listingsRouter.post(
     if (category === "Item" && listingType !== "ForSale") {
       return res.status(400).json({ error: "listingType must be ForSale for an Item" });
     }
-    if (typeof priceLamports !== "number" || priceLamports <= 0) {
-      return res.status(400).json({ error: "priceLamports must be a positive number" });
-    }
-    if (typeof guidePriceGBP !== "number" || guidePriceGBP <= 0) {
-      return res.status(400).json({ error: "guidePriceGBP must be a positive number" });
+    if (typeof priceUsd !== "number" || priceUsd <= 0) {
+      return res.status(400).json({ error: "priceUsd must be a positive number" });
     }
 
     const rawImages: unknown[] = Array.isArray(images) ? images : [];
@@ -116,8 +112,7 @@ listingsRouter.post(
       location: typeof location === "string" ? location : "N/A",
       description: typeof description === "string" ? description : "",
       images: cleanedImages,
-      priceLamports,
-      guidePriceGBP,
+      priceUsd,
     });
 
     res.status(201).json({ listing });

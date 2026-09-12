@@ -36,7 +36,7 @@ function describeListing(listing: Listing): string {
     `Title: ${listing.title}`,
     `Category: ${listing.category}${listing.category === "Property" ? ` (${listing.listingType === "ToLet" ? "to let" : "for sale"})` : ""}`,
     `Location: ${listing.location}`,
-    `Guide price: £${listing.guidePriceGBP.toLocaleString()}`,
+    `Price: $${listing.priceUsd.toLocaleString()} USD`,
     `Description: ${listing.description}`,
   ].join("\n");
 }
@@ -118,12 +118,13 @@ export async function screenListingForFraud(listing: Listing): Promise<FraudScre
 }
 
 const PRICE_SYSTEM_PROMPT = `You are a pricing analyst for a peer-to-peer marketplace. Given a listing's \
-category, description, and the seller's own guide price, suggest a fair asking price range in GBP based on \
-general market knowledge for this kind of property/item. You have no live market data feed - be explicit \
-about that limitation, and be conservative when the description lacks details that matter for pricing \
-(condition, exact spec, location detail). Respond with ONLY a JSON object, no other text, matching exactly \
-this shape:
-{"suggestedPriceGBP": <integer, your point estimate>, "lowGBP": <integer>, "highGBP": <integer>, "reasoning": "<3-5 sentences explaining the estimate, noting how it compares to the seller's guide price and any missing details that limit confidence>"}`;
+category, description, and the seller's own asking price, suggest a fair price range in USD based on \
+general market knowledge for this kind of property/item. All prices on this platform are quoted in USD and \
+escrowed on-chain in USDC (pegged 1:1 to the dollar) - do not use any other currency. You have no live \
+market data feed - be explicit about that limitation, and be conservative when the description lacks \
+details that matter for pricing (condition, exact spec, location detail). Respond with ONLY a JSON object, \
+no other text, matching exactly this shape:
+{"suggestedPriceUsd": <integer, your point estimate>, "lowUsd": <integer>, "highUsd": <integer>, "reasoning": "<3-5 sentences explaining the estimate, noting how it compares to the seller's asking price and any missing details that limit confidence>"}`;
 
 export async function suggestPrice(listing: Listing): Promise<PriceSuggestion> {
   const text = await callClaude(
@@ -208,7 +209,7 @@ export async function summarizeDispute(
 
   const prompt = [
     `Listing:\n${describeListing(listing)}`,
-    `\nOrder amount escrowed: ${(order.amountLamports / 1_000_000_000).toFixed(4)} SOL`,
+    `\nOrder amount escrowed: $${order.amountUsd.toLocaleString()} USD (held on-chain as USDC; buyer paid in ${order.paymentCurrency})`,
     `\nDispute evidence / messages:\n${messagesBlock}`,
   ].join("\n");
 

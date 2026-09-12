@@ -1,7 +1,6 @@
 import { Home, Package } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { lamportsToSol } from "../lib/solana";
 import type { Listing } from "../types";
 import { FraudBadge } from "./FraudBadge";
 import { ListingStatusBadge } from "./ListingStatusBadge";
@@ -38,11 +37,11 @@ export function ListingCard({ listing }: { listing: Listing }) {
         <div className="asset-stats">
           <div>
             <span className="stat-label">{listing.listingType === "ToLet" ? "Rent" : "Price"}</span>
-            <span className="stat-value">£{listing.guidePriceGBP.toLocaleString()}</span>
+            <span className="stat-value">${listing.priceUsd.toLocaleString()}</span>
           </div>
           <div>
-            <span className="stat-label">Escrow amount</span>
-            <span className="stat-value">{lamportsToSol(listing.priceLamports)} SOL</span>
+            <span className="stat-label">Pay with</span>
+            <span className="stat-value">USDC · USDT · SOL · SKR</span>
           </div>
         </div>
         <FraudBadge score={listing.aiFraudScore} />

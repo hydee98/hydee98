@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { AdminGate } from "../components/AdminGate";
-import { lamportsToSol } from "../lib/solana";
 import type { DisputeSummary, Listing, Order } from "../types";
 
 export function Disputes() {
@@ -91,8 +90,8 @@ function DisputeCard({
     <section className="panel">
       <h3>{listing?.title ?? order.listingId}</h3>
       <p className="muted">
-        Buyer: {order.buyerWallet.slice(0, 4)}…{order.buyerWallet.slice(-4)} ·{" "}
-        {lamportsToSol(order.amountLamports)} SOL in escrow
+        Buyer: {order.buyerWallet.slice(0, 4)}…{order.buyerWallet.slice(-4)} · ${order.amountUsd.toLocaleString()} in
+        escrow (paid {order.paymentAmount.toFixed(4)} {order.paymentCurrency})
       </p>
 
       <div className="chat-log">

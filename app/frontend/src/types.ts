@@ -12,6 +12,11 @@ export type ListingStatus =
   | "Removed";
 export type OrderStatus = "Funded" | "Released" | "Disputed" | "Resolved" | "Cancelled";
 
+/** Currencies a buyer can pay with. Escrow is always held on-chain in
+ * USDC - paying with anything else swaps into USDC in the buyer's own
+ * wallet first (see lib/jupiterSwap.ts) before create_order runs. */
+export type PaymentCurrency = "USDC" | "USDT" | "SOL" | "SKR";
+
 export interface Listing {
   id: string;
   onChainListingId: number | null;
@@ -22,8 +27,9 @@ export interface Listing {
   description: string;
   location: string;
   images: string[];
-  priceLamports: number;
-  guidePriceGBP: number;
+  /** The listing's price in USD - also, at 6 decimals, the USDC amount
+   * escrowed on-chain (USDC is pegged 1:1 to the dollar). */
+  priceUsd: number;
   status: ListingStatus;
   aiFraudScore: number | null;
   aiFraudFlags: string[];
@@ -41,7 +47,17 @@ export interface Order {
   onChainOrderId: number | null;
   listingId: string;
   buyerWallet: string;
-  amountLamports: number;
+  /** USD value of the order (== USDC amount held in escrow). */
+  amountUsd: number;
+  /** What the buyer actually paid with - only "USDC" reaches escrow
+   * directly, anything else was swapped client-side first. */
+  paymentCurrency: PaymentCurrency;
+  /** Amount paid in `paymentCurrency`'s own units (e.g. SOL, not
+   * lamports). */
+  paymentAmount: number;
+  /** The 2% platform fee (USD) this order incurs once it completes -
+   * never charged on a refund/cancellation. */
+  feeUsd: number;
   status: OrderStatus;
   disputeReasonUri: string | null;
   disputeMessages: DisputeMessage[];
@@ -59,9 +75,9 @@ export interface FraudScreening {
 }
 
 export interface PriceSuggestion {
-  suggestedPriceGBP: number;
-  lowGBP: number;
-  highGBP: number;
+  suggestedPriceUsd: number;
+  lowUsd: number;
+  highUsd: number;
   reasoning: string;
 }
 

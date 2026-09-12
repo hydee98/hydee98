@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { OrderStatusBadge } from "../components/OrderStatusBadge";
 import { SignInGate } from "../components/SignInGate";
-import { lamportsToSol } from "../lib/solana";
 import type { Listing, Order } from "../types";
 
 function truncate(pubkey: string): string {
@@ -76,7 +75,8 @@ function OrdersList() {
                 <p className="muted">
                   {isBuyer ? "You're buying" : "You're selling"} ·{" "}
                   {isBuyer ? `Seller ${listing?.seller ? truncate(listing.seller) : "unknown"}` : `Buyer ${truncate(order.buyerWallet)}`}{" "}
-                  · {lamportsToSol(order.amountLamports)} SOL escrowed
+                  · ${order.amountUsd.toLocaleString()} escrowed (paid {order.paymentAmount.toFixed(4)}{" "}
+                  {order.paymentCurrency})
                 </p>
               </div>
               <OrderStatusBadge status={order.status} />

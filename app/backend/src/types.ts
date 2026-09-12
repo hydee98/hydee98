@@ -9,6 +9,13 @@ export type ListingStatus =
   | "Removed";
 export type OrderStatus = "Funded" | "Released" | "Disputed" | "Resolved" | "Cancelled";
 
+/** Currencies a buyer can pay with. Escrow is always held on-chain in
+ * USDC (see programs/escrow_marketplace) - paying with anything else
+ * means the buyer's own wallet swaps into USDC first (e.g. via Jupiter)
+ * before the order is funded, so the backend and program never custody a
+ * non-USDC balance. See services/pricingService.ts. */
+export type PaymentCurrency = "USDC" | "USDT" | "SOL" | "SKR";
+
 /** Off-chain projection of the on-chain `Listing` account, enriched with the
  * descriptive fields an AI model needs (full description, photos) that
  * never fit cheaply on-chain. */
@@ -25,11 +32,11 @@ export interface Listing {
   /** Postcode/area for Property; "N/A" for a general Item. */
   location: string;
   images: string[];
-  priceLamports: number;
-  /** Display-only guide price in GBP - independent of any live SOL/GBP
-   * exchange rate, purely so the listing reads like a real Zoopla/eBay
-   * price tag in the UI. */
-  guidePriceGBP: number;
+  /** The listing's price in USD - the canonical price tag shown in the
+   * UI, and (at 6 decimals, USDC base units) exactly the `price_usdc`
+   * passed to the on-chain `create_listing` instruction. USDC is pegged
+   * 1:1 to the US dollar, so one number serves both purposes. */
+  priceUsd: number;
   status: ListingStatus;
   aiFraudScore: number | null;
   aiFraudFlags: string[];
@@ -50,7 +57,27 @@ export interface Order {
   /** Base58 pubkey of the buyer's wallet - the authenticated identity that
    * created this order (see requireAuth). */
   buyerWallet: string;
-  amountLamports: number;
+  /** USD value of the order - equal to the listing's priceUsd at the time
+   * of purchase, and (at 6 decimals) the USDC amount actually held in the
+   * on-chain escrow vault. */
+  amountUsd: number;
+  /** What the buyer actually paid with. Only "USDC" ever reaches the
+   * on-chain escrow directly - anything else means the buyer's wallet
+   * swapped into USDC client-side first (see lib/jupiterSwap.ts on the
+   * frontend); this field records their original choice for the receipt/
+   * order history UI. */
+  paymentCurrency: PaymentCurrency;
+  /** Amount paid in `paymentCurrency`'s own units (e.g. SOL, not
+   * lamports) - a mock-rate conversion of amountUsd until SKR launches
+   * and/or a live swap-quote feed is wired in. See pricingService.ts. */
+  paymentAmount: number;
+  /** The 2% platform fee (in USD) this order will incur - deducted from
+   * the seller's payout only once the order actually completes
+   * (confirm_receipt or a paying-out dispute resolution), never on a
+   * refund/cancellation. Routed to the treasury wallet for buyback/
+   * reward distribution. Informational here; the real deduction happens
+   * on-chain in the Anchor program. */
+  feeUsd: number;
   status: OrderStatus;
   disputeReasonUri: string | null;
   disputeMessages: DisputeMessage[];
@@ -74,9 +101,9 @@ export interface FraudScreening {
 }
 
 export interface PriceSuggestion {
-  suggestedPriceGBP: number;
-  lowGBP: number;
-  highGBP: number;
+  suggestedPriceUsd: number;
+  lowUsd: number;
+  highUsd: number;
   reasoning: string;
 }
 

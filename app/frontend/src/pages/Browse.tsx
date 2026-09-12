@@ -110,7 +110,7 @@ export function Browse() {
             />
           </label>
           <label>
-            Min price (£)
+            Min price ($)
             <input
               type="number"
               min={0}
@@ -120,7 +120,7 @@ export function Browse() {
             />
           </label>
           <label>
-            Max price (£)
+            Max price ($)
             <input
               type="number"
               min={0}

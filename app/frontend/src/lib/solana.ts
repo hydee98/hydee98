@@ -8,6 +8,23 @@ export const PROGRAM_ID = new PublicKey(
     "Byjh8A9Zir4PXUPUDJufmC6xoii5LN9W2omdt5D9LUuw"
 );
 
+/** The single stablecoin mint this deployment escrows - must match the
+ * `usdc_mint` passed to `initialize_marketplace`. Defaults to devnet
+ * USDC; override via VITE_USDC_MINT for mainnet or a custom test mint. */
+export const USDC_MINT = new PublicKey(
+  import.meta.env.VITE_USDC_MINT ?? "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+);
+
+/** Wallet that receives the 2% platform fee on completed sales - funds
+ * buyback and reward distribution for the platform token. Must match the
+ * `treasury` passed to `initialize_marketplace`/`set_fee_config`. The
+ * default below is a placeholder keypair generated for this repo (its
+ * private key was discarded) - override via VITE_TREASURY_WALLET with
+ * your real treasury address before going live. */
+export const TREASURY_WALLET = new PublicKey(
+  import.meta.env.VITE_TREASURY_WALLET ?? "FiCbFyfCHLCia1odL53qjTFGuPyNYMgppVRmXZC6aNod"
+);
+
 function u64Le(value: bigint): Buffer {
   const buf = Buffer.alloc(8);
   buf.writeBigUInt64LE(value);
@@ -41,21 +58,26 @@ export function deriveOrderPda(
   );
 }
 
-/** Mirrors `seeds = [b"order_vault", listing, order_count_le_bytes]`. */
-export function deriveOrderVaultPda(
+/** Mirrors `seeds = [b"vault_authority", listing, order_count_le_bytes]` -
+ * the PDA that signs outgoing transfers from an order's escrow token
+ * account (which is itself just a regular associated token account owned
+ * by this PDA, derived via getAssociatedTokenAddressSync). */
+export function deriveVaultAuthorityPda(
   listing: PublicKey,
   orderId: bigint
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("order_vault"), listing.toBuffer(), u64Le(orderId)],
+    [Buffer.from("vault_authority"), listing.toBuffer(), u64Le(orderId)],
     PROGRAM_ID
   );
 }
 
-export function lamportsToSol(lamports: number): number {
-  return lamports / 1_000_000_000;
+/** USDC uses 6 decimals - this converts a human USD amount into the base
+ * units `price_usdc`/`amount_usdc` expect on-chain. */
+export function usdToUsdcBaseUnits(usd: number): bigint {
+  return BigInt(Math.round(usd * 1_000_000));
 }
 
-export function solToLamports(sol: number): bigint {
-  return BigInt(Math.round(sol * 1_000_000_000));
+export function usdcBaseUnitsToUsd(baseUnits: bigint | number): number {
+  return Number(baseUnits) / 1_000_000;
 }

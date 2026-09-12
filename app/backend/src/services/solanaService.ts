@@ -17,6 +17,13 @@ const PROGRAM_ID = new PublicKey(
   process.env.MARKETPLACE_PROGRAM_ID || "Byjh8A9Zir4PXUPUDJufmC6xoii5LN9W2omdt5D9LUuw"
 );
 
+// Deployment-time on-chain parameters (see .env.example) - surfaced via
+// fetchClusterStatus purely so GET /api/health can confirm the backend
+// and frontend were configured with matching values; the Express server
+// itself never signs a Solana transaction with these.
+const USDC_MINT = process.env.USDC_MINT || "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+const TREASURY_WALLET = process.env.TREASURY_WALLET || null;
+
 let connection: Connection | null = null;
 export function getConnection(): Connection {
   if (!connection) {
@@ -63,15 +70,17 @@ export function deriveOrderPda(
   );
 }
 
-/** Mirrors `seeds = [b"order_vault", listing, order_count_le_bytes]` in lib.rs. */
-export function deriveOrderVaultPda(
+/** Mirrors `seeds = [b"vault_authority", listing, order_count_le_bytes]` in
+ * lib.rs - the PDA that signs outgoing transfers from an order's escrow
+ * token account. */
+export function deriveVaultAuthorityPda(
   listing: PublicKey,
   orderId: bigint
 ): [PublicKey, number] {
   const idBuf = Buffer.alloc(8);
   idBuf.writeBigUInt64LE(orderId);
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("order_vault"), listing.toBuffer(), idBuf],
+    [Buffer.from("vault_authority"), listing.toBuffer(), idBuf],
     PROGRAM_ID
   );
 }
@@ -81,6 +90,8 @@ export interface ClusterStatus {
   programId: string;
   slot: number | null;
   programDeployed: boolean;
+  usdcMint: string;
+  treasuryWallet: string | null;
   error?: string;
 }
 
@@ -92,6 +103,8 @@ export async function fetchClusterStatus(): Promise<ClusterStatus> {
   const base = {
     rpcUrl: conn.rpcEndpoint,
     programId: PROGRAM_ID.toBase58(),
+    usdcMint: USDC_MINT,
+    treasuryWallet: TREASURY_WALLET,
   };
   try {
     const [slot, programInfo] = await Promise.all([

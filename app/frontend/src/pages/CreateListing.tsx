@@ -14,7 +14,7 @@ export function CreateListing() {
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [guidePriceGBP, setGuidePriceGBP] = useState(100);
+  const [priceUsd, setPriceUsd] = useState(100);
   const [images, setImages] = useState<string[]>([]);
   const [compressing, setCompressing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -47,16 +47,12 @@ export function CreateListing() {
 
   const submit = async () => {
     setError(null);
-    if (!title.trim() || !description.trim() || guidePriceGBP <= 0) {
+    if (!title.trim() || !description.trim() || priceUsd <= 0) {
       setError("Please fill in a title, description, and a price greater than zero.");
       return;
     }
     setBusy(true);
     try {
-      // Demo-only nominal GBP -> lamports conversion so the escrow amount
-      // scales with the guide price. A real deployment would let the
-      // seller quote directly in SOL/a stablecoin, or use a live price feed.
-      const priceLamports = Math.round(guidePriceGBP * 10_000_000);
       const { listing } = await api.createListing({
         title: title.trim(),
         category,
@@ -64,8 +60,7 @@ export function CreateListing() {
         location: category === "Property" ? location.trim() || "N/A" : "N/A",
         description: description.trim(),
         images,
-        priceLamports,
-        guidePriceGBP,
+        priceUsd,
       });
       navigate(`/listing/${listing.id}`);
     } catch (err) {
@@ -127,14 +122,18 @@ export function CreateListing() {
           </label>
 
           <label>
-            Guide price (£)
+            Price (USD)
             <input
               type="number"
               min={1}
-              value={guidePriceGBP}
-              onChange={(e) => setGuidePriceGBP(Math.max(0, Number(e.target.value)))}
+              value={priceUsd}
+              onChange={(e) => setPriceUsd(Math.max(0, Number(e.target.value)))}
             />
           </label>
+          <p className="muted">
+            Escrowed on-chain in USDC at this exact dollar value. Buyers can pay with USDC, USDT, SOL, or
+            (once launched) SKR - their wallet converts to USDC automatically before funding escrow.
+          </p>
 
           <label>
             Photos ({images.length}/{MAX_IMAGES})

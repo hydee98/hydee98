@@ -36,7 +36,10 @@ export async function getOrder(id: string): Promise<Order | undefined> {
 export async function createOrder(input: {
   listingId: string;
   buyerWallet: string;
-  amountLamports: number;
+  amountUsd: number;
+  paymentCurrency: Order["paymentCurrency"];
+  paymentAmount: number;
+  feeUsd: number;
 }): Promise<Order> {
   const id = `order-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const order: Order = {
@@ -44,7 +47,10 @@ export async function createOrder(input: {
     onChainOrderId: null,
     listingId: input.listingId,
     buyerWallet: input.buyerWallet,
-    amountLamports: input.amountLamports,
+    amountUsd: input.amountUsd,
+    paymentCurrency: input.paymentCurrency,
+    paymentAmount: input.paymentAmount,
+    feeUsd: input.feeUsd,
     status: "Funded",
     disputeReasonUri: null,
     disputeMessages: [],

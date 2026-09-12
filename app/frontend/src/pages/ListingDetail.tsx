@@ -8,8 +8,7 @@ import { FraudBadge } from "../components/FraudBadge";
 import { ListingStatusBadge } from "../components/ListingStatusBadge";
 import { SignInGate } from "../components/SignInGate";
 import { useAuth } from "../context/AuthContext";
-import { lamportsToSol } from "../lib/solana";
-import type { ChatMessage, FraudScreening, Listing, PriceSuggestion } from "../types";
+import type { ChatMessage, FraudScreening, Listing, PaymentCurrency, PriceSuggestion } from "../types";
 
 /** Generic wrapper for the independent AI panels below - each one is "idle
  * until you ask for it" so a page load never fires Claude calls a visitor
@@ -130,8 +129,8 @@ export function ListingDetail() {
                 <>
                   <p>
                     <strong>
-                      Suggested: £{p.suggestedPriceGBP.toLocaleString()} (range £
-                      {p.lowGBP.toLocaleString()} - £{p.highGBP.toLocaleString()})
+                      Suggested: ${p.suggestedPriceUsd.toLocaleString()} (range $
+                      {p.lowUsd.toLocaleString()} - ${p.highUsd.toLocaleString()})
                     </strong>
                   </p>
                   <p>{p.reasoning}</p>
@@ -320,21 +319,45 @@ function ChatPanel({ listingId }: { listingId: string }) {
   );
 }
 
+interface CurrencyRate {
+  currency: PaymentCurrency;
+  usdRate: number;
+  isPlaceholder: boolean;
+}
+
+const FALLBACK_RATES: CurrencyRate[] = [
+  { currency: "USDC", usdRate: 1, isPlaceholder: false },
+  { currency: "USDT", usdRate: 1, isPlaceholder: false },
+  { currency: "SOL", usdRate: 150, isPlaceholder: false },
+  { currency: "SKR", usdRate: 0.05, isPlaceholder: true },
+];
+
 function BuyPanel({ listing }: { listing: Listing }) {
   const { publicKey } = useWallet();
   const { isSignedIn } = useAuth();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [rates, setRates] = useState<CurrencyRate[]>(FALLBACK_RATES);
+  const [currency, setCurrency] = useState<PaymentCurrency>("USDC");
+
+  useEffect(() => {
+    api
+      .getPricingRates()
+      .then((res) => setRates(res.currencies))
+      .catch(() => setRates(FALLBACK_RATES));
+  }, []);
 
   const isOwnListing = isSignedIn && publicKey && listing.seller === publicKey.toBase58();
   const canBuy = listing.status === "Active" && !isOwnListing;
+  const selectedRate = rates.find((r) => r.currency === currency) ?? FALLBACK_RATES[0];
+  const payAmount = listing.priceUsd / selectedRate.usdRate;
 
   const handleBuy = async () => {
     setStatus(null);
     setBusy(true);
     try {
-      const { order } = await api.createOrder(listing.id);
+      const { order } = await api.createOrder(listing.id, currency);
       setStatus(`Payment escrowed. Order ${order.id} created - view it under Orders to confirm receipt or open a dispute.`);
       setTimeout(() => navigate("/orders"), 1200);
     } catch (err) {
@@ -351,14 +374,30 @@ function BuyPanel({ listing }: { listing: Listing }) {
         <p className="muted">This listing isn't open for offers right now.</p>
       )}
       {isOwnListing && <p className="muted">This is your own listing.</p>}
+      <p className="invest-cost">${listing.priceUsd.toLocaleString()}</p>
+
+      <label className="currency-select">
+        Pay with
+        <select value={currency} onChange={(e) => setCurrency(e.target.value as PaymentCurrency)}>
+          {rates.map((r) => (
+            <option key={r.currency} value={r.currency}>
+              {r.currency}
+              {r.isPlaceholder ? " (coming soon)" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
       <p className="muted">
-        Runs through the backend's escrow simulation in this demo (no
-        deployed on-chain program yet - see the README); the real
-        <code> create_order</code>/<code>confirm_receipt</code> instructions
-        are ready in <code>src/lib/anchorIx.ts</code>.
+        ≈ {payAmount.toFixed(currency === "SOL" || currency === "SKR" ? 4 : 2)} {currency}
+        {selectedRate.isPlaceholder &&
+          " - SKR hasn't launched yet, so this is an indicative rate only, shown ahead of the token launch."}
+        {currency !== "USDC" &&
+          !selectedRate.isPlaceholder &&
+          " - your wallet swaps this into USDC automatically before it's escrowed; escrow itself always holds USDC."}
       </p>
-      <p className="invest-cost">
-        {lamportsToSol(listing.priceLamports)} SOL (£{listing.guidePriceGBP.toLocaleString()})
+      <p className="muted">
+        A 2% platform fee applies only once the sale completes (never on a refund/cancellation) and funds
+        buyback/rewards for the platform token - see <code>fee_bps</code> in the on-chain program.
       </p>
 
       {canBuy && (
