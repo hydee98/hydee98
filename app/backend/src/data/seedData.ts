@@ -4,13 +4,23 @@ import type { Listing, Order } from "../types.js";
  * Demo seed data - plain arrays, no side effects. Used to populate the
  * in-memory store on every boot (no DATABASE_URL) and to seed the database
  * exactly once, the first time it's empty (see db/migrate.ts).
+ *
+ * The seed listings/orders below carry placeholder wallet addresses
+ * (freshly generated keypairs whose private keys were discarded) so the
+ * UI has something realistic to display. Nobody can sign in as these
+ * demo sellers/buyers - a real visitor creates their own listings/orders
+ * under their own connected wallet, which are then fully interactive.
  */
+
+const DEMO_SELLER_1 = "7QvZcMBn1r2zzC1RCa7QsqNUKe6MUde4RxCis5a1Bbgv";
+const DEMO_SELLER_2 = "4Zgqy6cqfjhrdZ8xvdxveHBMbtxyoB7jFYruM5vKPz2h";
+const DEMO_BUYER_1 = "9tPqR3vLh2cQe7zK4nXw8bYfGdMsUvT1oAiWkC6xEjHp";
 
 export const seedListings: Listing[] = [
   {
     id: "listing-1",
     onChainListingId: 0,
-    seller: null,
+    seller: DEMO_SELLER_1,
     category: "Property",
     listingType: "ForSale",
     title: "3-bed semi-detached house, Chorlton",
@@ -28,7 +38,7 @@ export const seedListings: Listing[] = [
   {
     id: "listing-2",
     onChainListingId: 1,
-    seller: null,
+    seller: DEMO_SELLER_1,
     category: "Property",
     listingType: "ToLet",
     title: "2-bed flat to rent, Northern Quarter",
@@ -46,7 +56,7 @@ export const seedListings: Listing[] = [
   {
     id: "listing-3",
     onChainListingId: 2,
-    seller: null,
+    seller: DEMO_SELLER_2,
     category: "Item",
     listingType: "ForSale",
     title: "iPhone 14 Pro, 256GB, mint condition",
@@ -64,7 +74,7 @@ export const seedListings: Listing[] = [
   {
     id: "listing-4",
     onChainListingId: 3,
-    seller: null,
+    seller: DEMO_SELLER_2,
     category: "Item",
     listingType: "ForSale",
     title: "Brand new sealed laptops, half price, must sell today",
@@ -87,7 +97,7 @@ export const seedListings: Listing[] = [
   {
     id: "listing-5",
     onChainListingId: null,
-    seller: null,
+    seller: DEMO_SELLER_2,
     category: "Item",
     listingType: "ForSale",
     title: "Vintage 1978 Fender Telecaster",
@@ -105,7 +115,7 @@ export const seedListings: Listing[] = [
   {
     id: "listing-6",
     onChainListingId: 4,
-    seller: null,
+    seller: DEMO_SELLER_1,
     category: "Item",
     listingType: "ForSale",
     title: "Mountain bike, full suspension",
@@ -127,7 +137,7 @@ export const seedOrders: Order[] = [
     id: "order-1",
     onChainOrderId: 0,
     listingId: "listing-2",
-    buyerName: "buyer-jane",
+    buyerWallet: DEMO_BUYER_1,
     amountLamports: 22_000_000,
     status: "Funded",
     disputeReasonUri: null,
@@ -138,7 +148,7 @@ export const seedOrders: Order[] = [
     id: "order-2",
     onChainOrderId: 0,
     listingId: "listing-6",
-    buyerName: "buyer-tom",
+    buyerWallet: DEMO_BUYER_1,
     amountLamports: 3_200_000,
     status: "Disputed",
     disputeReasonUri: "ipfs://dispute-evidence-order-2",

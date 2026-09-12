@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { SignInGate } from "../components/SignInGate";
+import { compressImageFile } from "../lib/imageCompress";
 import type { ListingCategory, ListingType } from "../types";
+
+const MAX_IMAGES = 6;
 
 export function CreateListing() {
   const navigate = useNavigate();
@@ -11,12 +15,34 @@ export function CreateListing() {
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [guidePriceGBP, setGuidePriceGBP] = useState(100);
+  const [images, setImages] = useState<string[]>([]);
+  const [compressing, setCompressing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onCategoryChange = (next: ListingCategory) => {
     setCategory(next);
     if (next === "Item") setListingType("ForSale");
+  };
+
+  const onFilesSelected = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    setError(null);
+    const remaining = MAX_IMAGES - images.length;
+    const files = Array.from(fileList).slice(0, remaining);
+    setCompressing(true);
+    try {
+      const compressed = await Promise.all(files.map((f) => compressImageFile(f)));
+      setImages((prev) => [...prev, ...compressed]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to process one or more images");
+    } finally {
+      setCompressing(false);
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const submit = async () => {
@@ -37,7 +63,7 @@ export function CreateListing() {
         listingType,
         location: category === "Property" ? location.trim() || "N/A" : "N/A",
         description: description.trim(),
-        images: [],
+        images,
         priceLamports,
         guidePriceGBP,
       });
@@ -58,63 +84,92 @@ export function CreateListing() {
         <code>review_listing</code> does on-chain.
       </p>
 
-      <section className="panel form-panel">
-        <label>
-          Category
-          <select value={category} onChange={(e) => onCategoryChange(e.target.value as ListingCategory)}>
-            <option value="Item">Item</option>
-            <option value="Property">Property</option>
-          </select>
-        </label>
-
-        {category === "Property" && (
+      <SignInGate prompt="Sign in with your wallet to list something - you'll be the listing's seller.">
+        <section className="panel form-panel">
           <label>
-            Listing type
-            <select value={listingType} onChange={(e) => setListingType(e.target.value as ListingType)}>
-              <option value="ForSale">For sale</option>
-              <option value="ToLet">To let</option>
+            Category
+            <select value={category} onChange={(e) => onCategoryChange(e.target.value as ListingCategory)}>
+              <option value="Item">Item</option>
+              <option value="Property">Property</option>
             </select>
           </label>
-        )}
 
-        <label>
-          Title
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Mountain bike, full suspension" />
-        </label>
+          {category === "Property" && (
+            <label>
+              Listing type
+              <select value={listingType} onChange={(e) => setListingType(e.target.value as ListingType)}>
+                <option value="ForSale">For sale</option>
+                <option value="ToLet">To let</option>
+              </select>
+            </label>
+          )}
 
-        {category === "Property" && (
           <label>
-            Location
-            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Manchester, M21" />
+            Title
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Mountain bike, full suspension" />
           </label>
-        )}
 
-        <label>
-          Description
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={5}
-            placeholder="Describe the condition, features, and anything a buyer should know…"
-          />
-        </label>
+          {category === "Property" && (
+            <label>
+              Location
+              <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Manchester, M21" />
+            </label>
+          )}
 
-        <label>
-          Guide price (£)
-          <input
-            type="number"
-            min={1}
-            value={guidePriceGBP}
-            onChange={(e) => setGuidePriceGBP(Math.max(0, Number(e.target.value)))}
-          />
-        </label>
+          <label>
+            Description
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={5}
+              placeholder="Describe the condition, features, and anything a buyer should know…"
+            />
+          </label>
 
-        {error && <p className="error-banner">{error}</p>}
+          <label>
+            Guide price (£)
+            <input
+              type="number"
+              min={1}
+              value={guidePriceGBP}
+              onChange={(e) => setGuidePriceGBP(Math.max(0, Number(e.target.value)))}
+            />
+          </label>
 
-        <button onClick={submit} disabled={busy}>
-          {busy ? "Creating…" : "Create listing"}
-        </button>
-      </section>
+          <label>
+            Photos ({images.length}/{MAX_IMAGES})
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              disabled={images.length >= MAX_IMAGES || compressing}
+              onChange={(e) => {
+                onFilesSelected(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {compressing && <p className="muted">Processing photos…</p>}
+          {images.length > 0 && (
+            <div className="photo-preview-grid">
+              {images.map((src, i) => (
+                <div key={i} className="photo-preview">
+                  <img src={src} alt={`Upload ${i + 1}`} />
+                  <button type="button" className="photo-remove" onClick={() => removeImage(i)} aria-label="Remove photo">
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {error && <p className="error-banner">{error}</p>}
+
+          <button onClick={submit} disabled={busy || compressing}>
+            {busy ? "Creating…" : "Create listing"}
+          </button>
+        </section>
+      </SignInGate>
     </div>
   );
 }

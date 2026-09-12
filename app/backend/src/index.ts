@@ -4,8 +4,10 @@ import express from "express";
 import { ensureSchema } from "./db/migrate.js";
 import { isDbEnabled } from "./db/pool.js";
 import { aiRouter } from "./routes/ai.js";
+import { authRouter } from "./routes/auth.js";
 import { listingsRouter } from "./routes/listings.js";
 import { ordersRouter } from "./routes/orders.js";
+import { isAuthConfigured } from "./services/authService.js";
 import { fetchClusterStatus } from "./services/solanaService.js";
 
 const app = express();
@@ -16,7 +18,9 @@ const PORT = Number(process.env.PORT) || 8787;
 // so local dev and quick demos don't need any config.
 const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map((o) => o.trim());
 app.use(cors(allowedOrigins ? { origin: allowedOrigins } : {}));
-app.use(express.json());
+// Raised from Express's 100kb default - listing creation can carry a
+// handful of client-compressed photo data URLs in the JSON body.
+app.use(express.json({ limit: "20mb" }));
 
 app.get("/api/health", async (_req, res) => {
   const solana = await fetchClusterStatus();
@@ -24,11 +28,13 @@ app.get("/api/health", async (_req, res) => {
     ok: true,
     aiConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
     adminConfigured: Boolean(process.env.ADMIN_TOKEN),
+    authConfigured: isAuthConfigured(),
     dbEnabled: isDbEnabled(),
     solana,
   });
 });
 
+app.use("/api/auth", authRouter);
 app.use("/api/listings", listingsRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/ai", aiRouter);
@@ -67,6 +73,11 @@ async function main() {
     if (!process.env.ADMIN_TOKEN) {
       console.warn(
         "ADMIN_TOKEN is not set - arbitrator/authority actions (resolve dispute, review listing, dispute summary) will return 503 until it is configured (see .env.example)."
+      );
+    }
+    if (!isAuthConfigured()) {
+      console.warn(
+        "JWT_SECRET is not set - wallet sign-in will return 503 until it is configured (see .env.example)."
       );
     }
   });

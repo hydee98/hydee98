@@ -1,5 +1,5 @@
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { Link, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { AccountStatus } from "./components/AccountStatus";
 import { Browse } from "./pages/Browse";
 import { CreateListing } from "./pages/CreateListing";
 import { Disputes } from "./pages/Disputes";
@@ -14,12 +14,14 @@ export function App() {
           Market<span className="brand-accent">AI</span>
         </Link>
         <nav>
-          <Link to="/">Browse</Link>
-          <Link to="/sell">Sell</Link>
-          <Link to="/orders">Orders</Link>
-          <Link to="/disputes">Disputes</Link>
+          <NavLink to="/" end>
+            Browse
+          </NavLink>
+          <NavLink to="/sell">Sell</NavLink>
+          <NavLink to="/orders">Orders</NavLink>
+          <NavLink to="/disputes">Disputes</NavLink>
         </nav>
-        <WalletMultiButton />
+        <AccountStatus />
       </header>
 
       <main>

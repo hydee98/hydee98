@@ -1,3 +1,5 @@
+import { Home, Package } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { lamportsToSol } from "../lib/solana";
 import type { Listing } from "../types";
@@ -12,25 +14,39 @@ function categoryLabel(listing: Listing): string {
 }
 
 export function ListingCard({ listing }: { listing: Listing }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const cover = listing.images[0];
+
   return (
     <Link to={`/listing/${listing.id}`} className="asset-card">
-      <div className="asset-card-header">
+      <div className="asset-card-media">
+        {cover && !imgFailed ? (
+          <img src={cover} alt={listing.title} loading="lazy" onError={() => setImgFailed(true)} />
+        ) : (
+          <div className="asset-card-media-placeholder" aria-hidden="true">
+            {listing.category === "Property" ? <Home size={32} /> : <Package size={32} />}
+          </div>
+        )}
+        <div className="asset-card-media-badge">
+          <ListingStatusBadge status={listing.status} />
+        </div>
+      </div>
+      <div className="asset-card-body">
         <span className="asset-type">{categoryLabel(listing)}</span>
-        <ListingStatusBadge status={listing.status} />
-      </div>
-      <h3>{listing.title}</h3>
-      {listing.location !== "N/A" && <p className="asset-location">{listing.location}</p>}
-      <div className="asset-stats">
-        <div>
-          <span className="stat-label">{listing.listingType === "ToLet" ? "Rent" : "Price"}</span>
-          <span className="stat-value">£{listing.guidePriceGBP.toLocaleString()}</span>
+        <h3>{listing.title}</h3>
+        {listing.location !== "N/A" && <p className="asset-location">{listing.location}</p>}
+        <div className="asset-stats">
+          <div>
+            <span className="stat-label">{listing.listingType === "ToLet" ? "Rent" : "Price"}</span>
+            <span className="stat-value">£{listing.guidePriceGBP.toLocaleString()}</span>
+          </div>
+          <div>
+            <span className="stat-label">Escrow amount</span>
+            <span className="stat-value">{lamportsToSol(listing.priceLamports)} SOL</span>
+          </div>
         </div>
-        <div>
-          <span className="stat-label">Escrow amount</span>
-          <span className="stat-value">{lamportsToSol(listing.priceLamports)} SOL</span>
-        </div>
+        <FraudBadge score={listing.aiFraudScore} />
       </div>
-      <FraudBadge score={listing.aiFraudScore} />
     </Link>
   );
 }

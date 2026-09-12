@@ -4,7 +4,9 @@ A Zoopla/eBay-style marketplace - list a property (for sale or to let) or a
 general item, get paid in SOL - where payment sits in an on-chain escrow
 vault until the buyer confirms receipt/handover, and an AI layer (Claude)
 screens listings for fraud, suggests fair prices, answers buyer questions,
-and briefs the human arbitrator when a dispute is opened.
+and briefs the human arbitrator when a dispute is opened. Accounts are your
+Solana wallet (sign a message, no email/password), listings carry real
+photos, and Browse has search + price/location filters.
 
 > **Status: reference implementation / scaffold.** The Anchor program
 > compiles cleanly (`cargo check` passes) and the backend + frontend build
@@ -16,8 +18,13 @@ and briefs the human arbitrator when a dispute is opened.
 
 ## The model
 
-- **List it.** A seller lists a property (for sale or to let) or a general
-  item at a fixed price. Every new listing starts `PendingReview`.
+- **Your wallet is your account.** No signup form: connect a Solana wallet
+  and sign a short-lived message (free, no transaction, no gas) to prove
+  you own it. That signature is your session - see
+  [Accounts, photos & search](#accounts-photos--search) below.
+- **List it.** A signed-in seller lists a property (for sale or to let) or
+  a general item at a fixed price, with real photos. Every new listing
+  starts `PendingReview`.
 - **AI screens it.** Before it goes live, Claude reads the listing for scam
   signals - pressure tactics, "pay off-platform", prices that don't add up,
   vague descriptions - and produces a fraud score. Low score → `Active`;
@@ -68,18 +75,27 @@ Anchor.toml, Cargo.toml       Anchor workspace config
 
 app/backend/                  Express + TypeScript API
   src/services/aiService.ts     Claude integration: fraud screen, price suggestion, chat, dispute summary
+  src/services/authService.ts   Sign-in with Solana: nonce issuance, signature verification, JWT sessions
   src/services/solanaService.ts PDA derivation + read-side cluster/program health check
-  src/data/listings.ts          In-memory demo listing store (swap for a DB / on-chain reads)
-  src/data/orders.ts            In-memory demo order/escrow store
-  src/routes/                   REST routes
+  src/middleware/requireAuth.ts  Gates routes behind a valid wallet session (req.auth.publicKey)
+  src/middleware/adminAuth.ts    Gates arbitrator-only routes behind ADMIN_TOKEN
+  src/data/listings.ts          Listing store - Postgres when DATABASE_URL is set, in-memory otherwise
+  src/data/orders.ts             Order/escrow store, same dual-mode pattern
+  src/data/users.ts              User store (keyed by wallet public key), same dual-mode pattern
+  src/db/                        Postgres pool + idempotent schema/seed migration
+  src/routes/                    REST routes (auth, listings, orders, ai)
 
 app/frontend/                 React + Vite + TypeScript dApp
-  src/pages/Browse.tsx           Browse listings, filter by Property/Item
-  src/pages/ListingDetail.tsx    AI fraud/price panels, chat, Buy It Now
-  src/pages/Orders.tsx           Confirm receipt / cancel / open a dispute
+  src/pages/Browse.tsx           Search + filters, category tabs, listing grid
+  src/pages/ListingDetail.tsx    Photo gallery, AI fraud/price panels, chat, Buy It Now
+  src/pages/Orders.tsx           Your buying/selling orders: confirm receipt / cancel / dispute
   src/pages/Disputes.tsx         Arbitrator view: AI dispute summary + resolve
-  src/pages/CreateListing.tsx    Seller "list something for sale" form
+  src/pages/CreateListing.tsx    Seller "list something for sale" form with photo upload
+  src/context/AuthContext.tsx    Wallet sign-in state (nonce -> signMessage -> session)
+  src/components/SignInGate.tsx  Gates an action behind wallet sign-in
+  src/components/AdminGate.tsx   Gates an action behind the arbitrator admin token
   src/lib/anchorIx.ts            Hand-encoded create_order/confirm_receipt (no IDL/Anchor-CLI dependency)
+  src/lib/imageCompress.ts       Client-side photo resize/compression before upload
   src/wallet/                    Solana wallet-adapter context (Wallet Standard auto-detection)
 ```
 
@@ -128,6 +144,34 @@ All four gracefully degrade to a clear `503` ("AI features are not
 configured: set ANTHROPIC_API_KEY...") when no key is present, so the rest
 of the app keeps working without one.
 
+## Accounts, photos & search
+
+**Sign-in with Solana** (`app/backend/src/services/authService.ts`,
+`src/routes/auth.ts`): the frontend asks for a nonce
+(`POST /api/auth/nonce`), the connected wallet signs it (`signMessage` -
+free, no transaction), and the backend verifies the signature against the
+claimed public key (`tweetnacl`) before issuing a JWT session
+(`POST /api/auth/verify`). No password, no email, no separate signup - the
+first successful verify for a wallet creates its `User` row. Listings and
+orders always take their seller/buyer identity from this session
+(`req.auth.publicKey`), never from a client-supplied field, so e.g. a
+seller can't buy their own listing and only the actual buyer can confirm
+receipt - the same integrity guarantees the on-chain program enforces via
+transaction signers. Requires `JWT_SECRET`; unset, sign-in returns a clear
+`503` rather than crashing.
+
+**Photos**: sellers attach real photos when listing (`app/frontend/src/lib/imageCompress.ts`
+resizes/re-encodes client-side via `<canvas>` before upload, capped at 6
+images), stored as data URLs inside the listing's JSONB row - no separate
+object storage service to provision. `ListingCard` and the listing-detail
+gallery fall back to a category icon placeholder if a listing has no
+photos (or a demo seed listing's placeholder URL doesn't resolve).
+
+**Search + filters**: `GET /api/listings` takes `q` (title/description
+substring), `location`, `minPrice`/`maxPrice` (GBP), `listingType`, and
+`category` query params, filtered server-side - wired to a debounced
+search bar and a filters panel on Browse.
+
 ## Getting started
 
 ### Prerequisites
@@ -154,15 +198,20 @@ cp app/backend/.env.example app/backend/.env
 npm run dev:backend      # http://localhost:8787
 ```
 
-That's enough to run everything except the arbitrator actions (resolving a
-dispute, its AI summary, applying a fraud score), which need `ADMIN_TOKEN`
-set - any string works locally. Leave `DATABASE_URL` unset to use the
-in-memory store, or point it at a local Postgres to test persistence (see
-`.env.example` for the connection string shape).
+That's enough to run everything except:
+- **Arbitrator actions** (resolving a dispute, its AI summary, applying a
+  fraud score) - need `ADMIN_TOKEN` set; any string works locally.
+- **Signing in** (and anything that requires it: listing something, buying,
+  confirming receipt, disputes) - needs `JWT_SECRET` set; any string works
+  locally.
 
-`GET /api/health` reports whether the AI key, the database, and the admin
-token are configured, and whether the configured Solana RPC/program is
-reachable.
+Leave `DATABASE_URL` unset to use the in-memory store, or point it at a
+local Postgres to test persistence (see `.env.example` for the connection
+string shape).
+
+`GET /api/health` reports whether the AI key, the database, the admin
+token, and sign-in are configured, and whether the configured Solana
+RPC/program is reachable.
 
 ### 3. Frontend
 
@@ -174,9 +223,11 @@ npm run dev:frontend      # http://localhost:5173, proxies /api to the backend
 Open http://localhost:5173 - browse the demo listings (a house for sale, a
 flat to let, a few items - including one deliberately scammy-sounding
 listing so you can see the fraud screen actually flag something), run the
-AI fraud/price panels, chat about a listing, and walk through Buy It Now →
-Orders → confirm receipt or open a dispute → Disputes (arbitrator view with
-the AI summary).
+AI fraud/price panels, chat about a listing, and connect a wallet (any
+Wallet Standard wallet - Phantom, Solflare, Backpack, ...) to sign in and
+walk through listing something with real photos, Buy It Now → Orders →
+confirm receipt or open a dispute → Disputes (arbitrator view with the AI
+summary, gated by `ADMIN_TOKEN`).
 
 ### 4. Publishing this live
 
@@ -197,12 +248,13 @@ static build).
    (`marketai-frontend`, a static site).
 3. Render will pause on `ANTHROPIC_API_KEY` (marked `sync: false` in the
    blueprint so a real key never gets committed) - paste your key into the
-   backend service's Environment tab. `DATABASE_URL` and `ADMIN_TOKEN` are
-   wired up automatically - Postgres's connection string is injected from
-   the database resource, and `ADMIN_TOKEN` is a random secret Render
-   generates for you (`generateValue: true`). Find that generated value
-   afterward in the backend service's Environment tab - you'll need it to
-   unlock the arbitrator actions on `/disputes`.
+   backend service's Environment tab. `DATABASE_URL`, `ADMIN_TOKEN`, and
+   `JWT_SECRET` are wired up automatically - Postgres's connection string
+   is injected from the database resource, and the other two are random
+   secrets Render generates for you (`generateValue: true`). Find the
+   generated `ADMIN_TOKEN` afterward in the backend service's Environment
+   tab - you'll need it to unlock the arbitrator actions on `/disputes`
+   (`JWT_SECRET` you'll never need to touch - it just needs to exist).
 4. Both web services get a `https://<service-name>.onrender.com` URL by
    default. `render.yaml` already points `VITE_API_BASE_URL` at the backend
    service's URL and `CORS_ORIGIN` at the frontend's, using the service
@@ -237,6 +289,9 @@ sharing a link:
   shared secret, not a real accounts/roles system - fine for one or a
   handful of trusted arbitrators, not a substitute for proper staff auth
   if this grows a real team.
+- **Everyone else signs in with their wallet**, not a shared secret - see
+  [Accounts, photos & search](#accounts-photos--search). Needs
+  `JWT_SECRET`, which the Render blueprint generates for you automatically.
 
 **Before pointing real users at it:**
 
@@ -268,14 +323,17 @@ so a few things are honestly stubbed rather than faked:
   never been through `anchor build`/`anchor deploy`. The declared program
   ID is a freshly-generated placeholder keypair, not a real deployed
   program - replace it (`anchor keys sync`) before deploying for real.
-- **The demo listings/orders are off-chain only.** `app/backend/src/data/`
-  is an in-memory store; every seed listing has `seller: null` and no real
-  on-chain address. The frontend's Buy It Now flow uses the backend's
-  escrow simulation directly rather than sending a doomed transaction to a
-  non-existent listing PDA. Once you deploy the program and call
-  `create_listing` for real, point the backend's stores at the real
-  `Listing`/`Order` accounts (`solanaService.ts` already has the PDA
-  derivations and a cluster health check to build on) and swap the
+- **The demo listings/orders are off-chain only.** The seed data in
+  `app/backend/src/data/seedData.ts` carries placeholder wallet addresses
+  (freshly generated keypairs whose private keys were discarded) - nobody
+  can sign in as those demo sellers/buyers, and none of it has a real
+  on-chain address. Listings/orders a real signed-in visitor creates are
+  fully interactive under their own wallet. The frontend's Buy It Now flow
+  uses the backend's escrow simulation directly rather than sending a
+  doomed transaction to a non-existent listing PDA. Once you deploy the
+  program and call `create_listing` for real, point the backend's stores
+  at the real `Listing`/`Order` accounts (`solanaService.ts` already has
+  the PDA derivations and a cluster health check to build on) and swap the
   frontend's Buy panel over to `buildCreateOrderInstruction`/
   `buildConfirmReceiptInstruction` (already written in
   `app/frontend/src/lib/anchorIx.ts`, just not wired up to real addresses
@@ -295,6 +353,9 @@ so a few things are honestly stubbed rather than faked:
   authority-signed on-chain instruction; the admin token is a reasonable
   stand-in for a small team, but it isn't the same as requiring the
   platform's actual authority keypair to sign.
+- **Single dark theme, no light/system toggle.** A deliberate design call
+  for a crypto-native product, not a technical limitation - add a
+  `prefers-color-scheme` branch in `styles.css` if you want one.
 - **Anchor's own IDL/TS types aren't generated**, so `tests/escrow_marketplace.ts`
   imports a `../target/types/escrow_marketplace` module that only exists
   after `anchor build`. The test file was written against the program's

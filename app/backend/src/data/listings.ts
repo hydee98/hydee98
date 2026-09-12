@@ -37,7 +37,7 @@ export async function getListing(id: string): Promise<Listing | undefined> {
 export async function createListing(
   input: Omit<
     Listing,
-    "id" | "createdAt" | "status" | "aiFraudScore" | "aiFraudFlags" | "onChainListingId" | "seller"
+    "id" | "createdAt" | "status" | "aiFraudScore" | "aiFraudFlags" | "onChainListingId"
   >
 ): Promise<Listing> {
   const id = `listing-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -45,7 +45,6 @@ export async function createListing(
     ...input,
     id,
     onChainListingId: null,
-    seller: null,
     status: "PendingReview",
     aiFraudScore: null,
     aiFraudFlags: [],

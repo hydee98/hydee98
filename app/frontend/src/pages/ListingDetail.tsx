@@ -1,10 +1,13 @@
 import { useWallet } from "@solana/wallet-adapter-react";
+import { Home, Package } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { AdminGate } from "../components/AdminGate";
 import { FraudBadge } from "../components/FraudBadge";
 import { ListingStatusBadge } from "../components/ListingStatusBadge";
+import { SignInGate } from "../components/SignInGate";
+import { useAuth } from "../context/AuthContext";
 import { lamportsToSol } from "../lib/solana";
 import type { ChatMessage, FraudScreening, Listing, PriceSuggestion } from "../types";
 
@@ -59,89 +62,145 @@ export function ListingDetail() {
   if (!listing) return <div className="page">Loading…</div>;
 
   return (
-    <div className="page asset-detail">
-      <div className="asset-detail-header">
-        <div>
-          <span className="asset-type">
-            {listing.category}
-            {listing.category === "Property" && (listing.listingType === "ToLet" ? " · To Let" : " · For Sale")}
-          </span>
-          <h1>{listing.title}</h1>
-          {listing.location !== "N/A" && <p className="asset-location">{listing.location}</p>}
+    <div className="page">
+      <div className="asset-detail">
+        <div className="asset-detail-header">
+          <div>
+            <span className="asset-type">
+              {listing.category}
+              {listing.category === "Property" && (listing.listingType === "ToLet" ? " · To Let" : " · For Sale")}
+            </span>
+            <h1>{listing.title}</h1>
+            {listing.location !== "N/A" && <p className="asset-location">{listing.location}</p>}
+          </div>
+          <div className="asset-detail-badges">
+            <ListingStatusBadge status={listing.status} />
+            <FraudBadge score={listing.aiFraudScore} />
+          </div>
         </div>
-        <div className="asset-detail-badges">
-          <ListingStatusBadge status={listing.status} />
-          <FraudBadge score={listing.aiFraudScore} />
-        </div>
-      </div>
 
-      <p className="asset-description">{listing.description}</p>
+        <Gallery images={listing.images} title={listing.title} category={listing.category} />
 
-      {listing.aiFraudFlags.length > 0 && (
-        <section className="panel">
-          <h3>Flagged concerns</h3>
-          <ul>
-            {listing.aiFraudFlags.map((f, i) => (
-              <li key={i}>{f}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+        <div className="asset-detail-main">
+          <p className="asset-description">{listing.description}</p>
 
-      <div className="ai-panels">
-        <AiPanel
-          title="AI Fraud Screening"
-          buttonLabel="Run fraud screen"
-          state={fraud}
-          onApplied={load}
-          listingId={listing.id}
-          applyKind="fraud"
-          render={(f) => (
-            <>
-              <p>
-                <strong>
-                  {f.recommendation} - score {f.score}/100
-                </strong>
-              </p>
-              <p>{f.summary}</p>
-              {f.flags.length > 0 && (
-                <ul>
-                  {f.flags.map((flag, i) => (
-                    <li key={i}>{flag}</li>
-                  ))}
-                </ul>
+          {listing.aiFraudFlags.length > 0 && (
+            <section className="panel">
+              <h3>Flagged concerns</h3>
+              <ul>
+                {listing.aiFraudFlags.map((f, i) => (
+                  <li key={i}>{f}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <div className="ai-panels">
+            <AiPanel
+              title="AI Fraud Screening"
+              buttonLabel="Run fraud screen"
+              state={fraud}
+              onApplied={load}
+              listingId={listing.id}
+              applyKind="fraud"
+              render={(f) => (
+                <>
+                  <p>
+                    <strong>
+                      {f.recommendation} - score {f.score}/100
+                    </strong>
+                  </p>
+                  <p>{f.summary}</p>
+                  {f.flags.length > 0 && (
+                    <ul>
+                      {f.flags.map((flag, i) => (
+                        <li key={i}>{flag}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
-            </>
-          )}
-        />
+            />
 
-        <AiPanel
-          title="AI Price Suggestion"
-          buttonLabel="Get price suggestion"
-          state={price}
-          render={(p) => (
-            <>
-              <p>
-                <strong>
-                  Suggested: £{p.suggestedPriceGBP.toLocaleString()} (range £
-                  {p.lowGBP.toLocaleString()} - £{p.highGBP.toLocaleString()})
-                </strong>
-              </p>
-              <p>{p.reasoning}</p>
-            </>
-          )}
-        />
+            <AiPanel
+              title="AI Price Suggestion"
+              buttonLabel="Get price suggestion"
+              state={price}
+              render={(p) => (
+                <>
+                  <p>
+                    <strong>
+                      Suggested: £{p.suggestedPriceGBP.toLocaleString()} (range £
+                      {p.lowGBP.toLocaleString()} - £{p.highGBP.toLocaleString()})
+                    </strong>
+                  </p>
+                  <p>{p.reasoning}</p>
+                </>
+              )}
+            />
+          </div>
+
+          <ChatPanel listingId={listing.id} />
+        </div>
+
+        <div className="asset-detail-side">
+          <BuyPanel listing={listing} />
+        </div>
       </div>
-
-      <ChatPanel listingId={listing.id} />
-
-      <BuyPanel listing={listing} />
 
       <p className="disclaimer">
         This platform and its AI-generated content are for demonstration
         purposes only. Payment is held in escrow and only released once you
         confirm receipt - always inspect items/property before confirming.
       </p>
+    </div>
+  );
+}
+
+function Gallery({
+  images,
+  title,
+  category,
+}: {
+  images: string[];
+  title: string;
+  category: Listing["category"];
+}) {
+  const [active, setActive] = useState(0);
+  const [failed, setFailed] = useState<Set<number>>(new Set());
+  const current = !failed.has(active) ? images[active] : undefined;
+  const visibleThumbs = images.map((src, i) => ({ src, i })).filter(({ i }) => !failed.has(i));
+
+  return (
+    <div className="gallery">
+      <div className="gallery-main">
+        {current ? (
+          <img
+            src={current}
+            alt={title}
+            onError={() => setFailed((prev) => new Set(prev).add(active))}
+          />
+        ) : (
+          <div className="gallery-main-placeholder">
+            {category === "Property" ? <Home size={56} /> : <Package size={56} />}
+          </div>
+        )}
+      </div>
+      {visibleThumbs.length > 1 && (
+        <div className="gallery-thumbs">
+          {visibleThumbs.map(({ src, i }) => (
+            <button
+              key={i}
+              type="button"
+              className={i === active ? "gallery-thumb active" : "gallery-thumb"}
+              onClick={() => setActive(i)}
+              aria-label={`Photo ${i + 1}`}
+            >
+              <img src={src} alt="" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -262,24 +321,20 @@ function ChatPanel({ listingId }: { listingId: string }) {
 }
 
 function BuyPanel({ listing }: { listing: Listing }) {
-  const { publicKey, connected } = useWallet();
+  const { publicKey } = useWallet();
+  const { isSignedIn } = useAuth();
   const navigate = useNavigate();
-  const [buyerName, setBuyerName] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const canBuy = listing.status === "Active";
-  const effectiveName = buyerName.trim() || (connected && publicKey ? publicKey.toBase58().slice(0, 8) : "");
+  const isOwnListing = isSignedIn && publicKey && listing.seller === publicKey.toBase58();
+  const canBuy = listing.status === "Active" && !isOwnListing;
 
   const handleBuy = async () => {
     setStatus(null);
-    if (!effectiveName) {
-      setStatus("Enter a name (or connect a wallet) to identify you as the buyer.");
-      return;
-    }
     setBusy(true);
     try {
-      const { order } = await api.createOrder(listing.id, effectiveName);
+      const { order } = await api.createOrder(listing.id);
       setStatus(`Payment escrowed. Order ${order.id} created - view it under Orders to confirm receipt or open a dispute.`);
       setTimeout(() => navigate("/orders"), 1200);
     } catch (err) {
@@ -292,33 +347,27 @@ function BuyPanel({ listing }: { listing: Listing }) {
   return (
     <section className="panel invest-panel">
       <h3>{listing.listingType === "ToLet" ? "Rent this property" : "Buy It Now"}</h3>
-      {!canBuy && <p className="muted">This listing isn't open for offers right now.</p>}
+      {!canBuy && listing.status !== "Active" && (
+        <p className="muted">This listing isn't open for offers right now.</p>
+      )}
+      {isOwnListing && <p className="muted">This is your own listing.</p>}
       <p className="muted">
-        This listing hasn't been registered on-chain in this demo (no deployed
-        program - see the README), so purchases here run through the demo
-        backend's escrow simulation rather than a real wallet transaction.
-        The on-chain <code>create_order</code>/<code>confirm_receipt</code>{" "}
-        instructions are implemented in <code>src/lib/anchorIx.ts</code> and
-        ready to use once a real listing exists on-chain.
+        Runs through the backend's escrow simulation in this demo (no
+        deployed on-chain program yet - see the README); the real
+        <code> create_order</code>/<code>confirm_receipt</code> instructions
+        are ready in <code>src/lib/anchorIx.ts</code>.
       </p>
-      <div className="invest-controls">
-        <label>
-          Your name
-          <input
-            type="text"
-            value={buyerName}
-            onChange={(e) => setBuyerName(e.target.value)}
-            placeholder={connected && publicKey ? publicKey.toBase58().slice(0, 8) : "e.g. Jane"}
-            disabled={!canBuy}
-          />
-        </label>
-        <p className="invest-cost">
-          {lamportsToSol(listing.priceLamports)} SOL (£{listing.guidePriceGBP.toLocaleString()})
-        </p>
-        <button onClick={handleBuy} disabled={!canBuy || busy}>
-          {busy ? "Processing…" : listing.listingType === "ToLet" ? "Pay first month + deposit" : "Buy It Now"}
-        </button>
-      </div>
+      <p className="invest-cost">
+        {lamportsToSol(listing.priceLamports)} SOL (£{listing.guidePriceGBP.toLocaleString()})
+      </p>
+
+      {canBuy && (
+        <SignInGate prompt="Sign in with your wallet to buy - your wallet is your account, no separate signup.">
+          <button onClick={handleBuy} disabled={busy}>
+            {busy ? "Processing…" : listing.listingType === "ToLet" ? "Pay first month + deposit" : "Buy It Now"}
+          </button>
+        </SignInGate>
+      )}
       {status && <p className="invest-status">{status}</p>}
     </section>
   );

@@ -22,6 +22,8 @@ services:
         sync: false # set this by hand in the Render dashboard - never commit a real key
       - key: ADMIN_TOKEN
         generateValue: true # Render generates a random secret - view it in the dashboard's Environment tab to use the Disputes/arbitrator page
+      - key: JWT_SECRET
+        generateValue: true # signs wallet sign-in sessions - Render-generated, no action needed
       - key: DATABASE_URL
         fromDatabase:
           name: marketai-db

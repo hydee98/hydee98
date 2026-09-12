@@ -40,12 +40,15 @@ export interface Order {
   id: string;
   onChainOrderId: number | null;
   listingId: string;
-  buyerName: string;
+  buyerWallet: string;
   amountLamports: number;
   status: OrderStatus;
   disputeReasonUri: string | null;
   disputeMessages: DisputeMessage[];
   createdAt: string;
+  /** Present only on results from /api/orders/mine - the caller's
+   * relationship to this order. */
+  role?: "buyer" | "seller";
 }
 
 export interface FraudScreening {

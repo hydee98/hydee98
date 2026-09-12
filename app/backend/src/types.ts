@@ -47,14 +47,23 @@ export interface Order {
   id: string;
   onChainOrderId: number | null;
   listingId: string;
-  /** Display name/handle for the demo - a real deployment keys this off
-   * the buyer's wallet pubkey instead. */
-  buyerName: string;
+  /** Base58 pubkey of the buyer's wallet - the authenticated identity that
+   * created this order (see requireAuth). */
+  buyerWallet: string;
   amountLamports: number;
   status: OrderStatus;
   disputeReasonUri: string | null;
   disputeMessages: DisputeMessage[];
   createdAt: string;
+}
+
+/** A real account, identified by wallet - not username/password. Created
+ * (or touched) the first time a wallet completes sign-in. */
+export interface User {
+  publicKey: string;
+  displayName: string | null;
+  createdAt: string;
+  lastSeenAt: string;
 }
 
 export interface FraudScreening {

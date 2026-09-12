@@ -91,7 +91,8 @@ function DisputeCard({
     <section className="panel">
       <h3>{listing?.title ?? order.listingId}</h3>
       <p className="muted">
-        Buyer: {order.buyerName} · {lamportsToSol(order.amountLamports)} SOL in escrow
+        Buyer: {order.buyerWallet.slice(0, 4)}…{order.buyerWallet.slice(-4)} ·{" "}
+        {lamportsToSol(order.amountLamports)} SOL in escrow
       </p>
 
       <div className="chat-log">

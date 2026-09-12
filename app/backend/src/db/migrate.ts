@@ -31,6 +31,13 @@ export async function ensureSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      public_key TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 
   const { rows: listingCount } = await pool.query("SELECT count(*)::int AS n FROM listings");
   if (listingCount[0].n === 0) {
